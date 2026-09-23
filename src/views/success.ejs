@@ -1,0 +1,3 @@
+<%- include("partials/header", { activeNav: "Payments", pageTitle: "Transfer Successful | SecureBank" }) %>
+<div class="status-page success-page"><div class="status-icon">✓</div><p class="eyebrow">PAYMENTS</p><h1>Transfer Successful</h1><p>Amount transferred: <strong>₹<%= amount %></strong></p><p>Transaction reference: <strong><%= reference %></strong></p><div><a class="primary-button" href="/dashboard">Back to Overview</a><a class="outline-button" href="/transfer">Make another transfer</a></div></div>
+<%- include("partials/footer") %>

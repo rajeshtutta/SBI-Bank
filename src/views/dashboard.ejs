@@ -1,0 +1,73 @@
+<%- include("partials/header", { activeNav: "Overview", pageTitle: "Overview | SecureBank" }) %>
+<section class="dashboard-page">
+  <div class="welcome-strip">
+    <div>
+      <p class="eyebrow">RELATIONSHIP OVERVIEW</p>
+      <h1>Hello <%= user.fullName %>, <span>Let's get started!</span></h1>
+      <p class="muted">Manage your accounts, transfers and everyday banking from one place.</p>
+    </div>
+    <div class="welcome-avatar"><%= (user.fullName || 'U').slice(0,1).toUpperCase() %></div>
+  </div>
+
+  <section class="quick-actions">
+    <div class="section-heading"><h2>Quick Actions</h2><span>Explore everyday banking</span></div>
+    <div class="quick-action-row">
+      <% const actions = [['↗','Refer & Earn'],['♧','Save More'],['▤','Pay Bills'],['▥','Invest Now'],['▭','Credit Card'],['◈','Learn and Lead'],['▣','Get Your Statement'],['♧','Get Your Green Score']]; %>
+      <% actions.forEach((a, i) => { %>
+        <a class="quick-action" href="<%= i === 2 ? '#' : '#' %>" data-demo-action><span class="quick-icon"><%= a[0] %></span><strong><%= a[1] %></strong></a>
+      <% }) %>
+    </div>
+  </section>
+
+  <div class="dashboard-grid">
+    <div class="main-dashboard">
+      <section class="relationship-section" id="accounts">
+        <div class="section-heading"><h2>Relationship Overview</h2><a href="/accounts">View all accounts <span>›</span></a></div>
+        <div class="relationship-cards">
+          <article class="relationship-card transaction-card">
+            <div class="card-top"><span>TRANSACTION ACCOUNTS</span><span class="card-eye">◉</span></div>
+            <p>Combined Balance</p>
+            <strong>₹<%= accounts.reduce((sum, a) => sum + Number(a.balance), 0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}) %></strong>
+            <div class="card-links"><a href="/accounts">View Accounts</a><a href="#transactions">Transactions</a></div>
+          </article>
+          <article class="relationship-card deposits-card">
+            <div class="soft-art">◌</div><span class="card-label">DEPOSITS</span>
+            <h3>Grow your money faster</h3><p>Explore high-yield deposit options in this training portal.</p>
+            <a href="#" data-demo-action>Explore</a>
+          </article>
+          <article class="relationship-card loans-card">
+            <div class="soft-art">⌂</div><span class="card-label">LOANS</span>
+            <h3>Find the perfect loan</h3><p>Explore loan journeys as demo modules.</p>
+            <a href="#" data-demo-action>Manage loans</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="transaction-section" id="transactions">
+        <div class="section-heading"><h2>Recent Transactions</h2><a href="/dashboard#transactions">View all <span>›</span></a></div>
+        <% if (transactions.length) { %>
+          <div class="transaction-list">
+            <% transactions.forEach(t => { %>
+              <div class="transaction-row">
+                <div class="txn-icon"><%= t.transaction_type === 'TRANSFER' ? '↔' : '₹' %></div>
+                <div class="txn-main"><strong><%= t.remarks || t.transaction_type %></strong><span><%= new Date(t.created_at).toLocaleString('en-IN') %> • <%= t.reference %></span></div>
+                <div class="txn-amount">₹<%= Number(t.amount).toLocaleString('en-IN',{minimumFractionDigits:2}) %><small class="status-<%= String(t.status).toLowerCase() %>"><%= t.status %></small></div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %><div class="empty-state">No transactions available yet.</div><% } %>
+      </section>
+    </div>
+
+    <aside class="dashboard-sidebar">
+      <article class="offer-card">
+        <div class="offer-badge">OFFER</div><h3>Business Loan</h3><p>Check eligibility and explore the training flow.</p><button type="button" data-demo-action>Check Eligibility <span>›</span></button>
+      </article>
+      <article class="side-panel">
+        <div class="section-heading"><h2>Investments</h2></div>
+        <div class="side-links"><a href="#" data-demo-action><span>♧</span>Mutual Funds <b>›</b></a><a href="#" data-demo-action><span>▣</span>Demat &amp; Securities <b>›</b></a><a href="#" data-demo-action><span>♧</span>NPS <b>›</b></a><a href="#" data-demo-action><span>♧</span>PPF <b>›</b></a></div>
+      </article>
+    </aside>
+  </div>
+</section>
+<%- include("partials/footer") %>

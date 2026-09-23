@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="SecureBank training net-banking portal">
+  <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'SecureBank NetBanking' %></title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="bank-app">
+<header class="site-shell">
+  <div class="utility-bar">
+    <div class="utility-left">
+      <span class="utility-active">Banking</span>
+      <span>Lifestyle</span>
+      <span>Rewards</span>
+      <span class="demo-switch">Training Demo <span class="switch-dot"></span></span>
+    </div>
+    <div class="utility-right">
+      <span>▣ Get Help&nbsp; <strong>1800-TRAIN</strong></span>
+      <span>English ▾</span>
+      <button type="button" class="text-size" data-font-size="small">A-</button>
+      <button type="button" class="text-size" data-font-size="normal">A</button>
+      <button type="button" class="text-size" data-font-size="large">A+</button>
+    </div>
+  </div>
+
+  <div class="main-header">
+    <a class="brand-lockup" href="/dashboard" aria-label="SecureBank training home">
+      <span class="brand-word">yono</span><span class="brand-orb">●</span><span class="brand-bank">SecureBank</span>
+      <small>NET-BANKING • TRAINING DEMO</small>
+    </a>
+    <div class="header-actions">
+      <button class="icon-button" type="button" title="Search" aria-label="Search">⌕</button>
+      <button class="icon-button" type="button" title="Notifications" aria-label="Notifications">♧</button>
+      <button class="icon-button" type="button" title="Favorites" aria-label="Favorites">♡</button>
+      <% if (user) { %>
+        <div class="profile-chip"><span class="avatar"><%= (user.fullName || 'U').slice(0,1).toUpperCase() %></span><span>My Profile</span></div>
+      <% } %>
+    </div>
+  </div>
+
+  <nav class="primary-nav" aria-label="Primary navigation">
+    <a href="/dashboard" class="nav-item <%= activeNav === 'Overview' ? 'active' : '' %>">Overview</a>
+    <a href="/accounts" class="nav-item <%= activeNav === 'Accounts' ? 'active' : '' %>">Accounts</a>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Payments' ? 'active' : '' %>" data-menu="payments">Payments</button>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Deposits' ? 'active' : '' %>" data-menu="deposits">Deposits</button>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Loans' ? 'active' : '' %>" data-menu="loans">Loans</button>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Cards' ? 'active' : '' %>" data-menu="cards">Cards</button>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Investments' ? 'active' : '' %>" data-menu="investments">Investments</button>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Insurance' ? 'active' : '' %>" data-menu="insurance">Insurance</button>
+    <button type="button" class="nav-item mega-trigger <%= activeNav === 'Services' ? 'active' : '' %>" data-menu="services">Services</button>
+    <button type="button" class="mobile-menu-button" aria-label="Open menu">☰</button>
+  </nav>
+</header>
+
+<div class="mega-overlay" data-mega-overlay></div>
+<div class="mega-layer" aria-hidden="true">
+  <%- include('mega-menus') %>
+</div>
+
+<main class="page-shell" id="main">

@@ -1,0 +1,39 @@
+<%- include("partials/header", { activeNav: "Accounts", pageTitle: "Accounts | SecureBank" }) %>
+<section class="accounts-page">
+  <div class="breadcrumb"><a href="/dashboard">⌂</a><span>›</span><span>Relationship Overview</span></div>
+  <div class="account-tabs">
+    <a class="active" href="/accounts">Transaction Accounts</a><a href="#" data-demo-action>Deposits</a><a href="#" data-demo-action>Loans</a><a href="#" data-demo-action>Investments</a><a href="#" data-demo-action>Insurance</a>
+  </div>
+  <div class="account-layout">
+    <aside class="account-sidebar">
+      <div class="search-box">⌕ <input placeholder="Search here..." aria-label="Search accounts"></div>
+      <h3>Savings Account</h3>
+      <% accounts.forEach((a, i) => { %>
+        <button class="account-selector <%= i === 0 ? 'selected' : '' %>" type="button" data-account-select="<%= a.id %>"><span>A/C Number</span><strong>XXXXXXX<%= a.account_number.slice(-4) %></strong><small><%= a.account_type %></small></button>
+      <% }) %>
+      <a class="side-apply" href="/auth/register">Apply for a new Savings Account <span>→</span></a>
+      <a class="side-apply" href="/auth/register">Apply for Joint Savings Account <span>→</span></a>
+      <h3 class="current-label">Current Account</h3>
+    </aside>
+
+    <div class="account-detail">
+      <div class="account-header-line"><div><span class="account-type-pill">SAVINGS A/C</span><span class="masked-header">XXXXXXX<%= accounts[0].account_number.slice(-4) %> ◉</span></div><a href="#" data-demo-action class="manage-account">▤ Manage Account</a></div>
+      <div class="detail-tabs"><button class="active" data-tab="summary">Account Summary</button><button data-tab="transactions">Transactions</button><button data-tab="statements">Statements</button><button data-tab="spend">Spend Analysis</button></div>
+      <div class="account-panel" id="account-summary-panel">
+        <div class="account-summary-top">
+          <div class="summary-fields">
+            <div><span>Account Description</span><strong>REGULAR SB CHQ-INDIVIDUALS</strong></div>
+            <div><span>Currency</span><strong><%= accounts[0].currency === 'INR' ? 'Rupees' : accounts[0].currency %></strong></div>
+            <div><span>Mode of Operation</span><strong>Single</strong></div>
+            <div><span>Rate of Interest</span><strong>Not stored in demo DB</strong></div>
+            <div><span>Nominee(s)</span><strong>Not configured</strong></div>
+          </div>
+          <div class="balance-panel"><div><span>Available Balance</span><strong>₹<%= Number(accounts[0].balance).toLocaleString('en-IN',{minimumFractionDigits:2}) %></strong></div><div><span>Hold/Lien Amount</span><strong>₹0.00</strong></div><div><span>Uncleared Balance</span><strong>₹0.00</strong></div><div><span>MOD Balance</span><strong>₹0.00</strong></div></div>
+        </div>
+        <div class="debit-card-row"><span class="debit-symbol">▭</span><div><strong>Debit Card</strong><small>View, apply &amp; manage</small></div><span>›</span></div>
+      </div>
+      <div class="account-panel hidden" id="account-placeholder-panel"><div class="empty-state"><h3>Training module</h3><p>This section is presented as a UI demonstration. Existing account and transaction data remain unchanged.</p></div></div>
+    </div>
+  </div>
+</section>
+<%- include("partials/footer") %>

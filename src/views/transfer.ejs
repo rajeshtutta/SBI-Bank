@@ -1,0 +1,28 @@
+<%- include("partials/header", { activeNav: "Payments", pageTitle: "Payments | SecureBank" }) %>
+<section class="transfer-page">
+  <div class="breadcrumb"><a href="/dashboard">⌂</a><span>›</span><span>Payments</span><span>›</span><strong>Fund Transfer</strong></div>
+  <div class="page-title-row"><div><p class="eyebrow">PAYMENTS</p><h1>Fund Transfer</h1><p class="muted">Use the existing secure transfer flow. Your PostgreSQL-backed transaction service is unchanged.</p></div><a href="/dashboard" class="outline-button">Back to Overview</a></div>
+  <div class="transfer-grid">
+    <div class="form-card banking-form-card">
+      <div class="card-heading"><span class="heading-icon">↔</span><div><h2>Send Money</h2><p>Transfer funds to an account</p></div></div>
+      <form method="post" action="/transfer">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label>Debit account<select name="senderAccountId" required><% accounts.forEach(a => { %><option value="<%= a.id %>">XXXX<%= a.account_number.slice(-4) %> — ₹<%= Number(a.balance).toLocaleString('en-IN',{minimumFractionDigits:2}) %></option><% }) %></select></label>
+        <label>Receiver account number<input name="receiverAccountNumber" required></label>
+        <label>Amount<input type="number" name="amount" min="1" max="1000000" step="0.01" required></label>
+        <label>Remarks<input name="remarks" maxlength="255" placeholder="Optional"></label>
+        <button class="primary-button" type="submit">Transfer securely <span>›</span></button>
+      </form>
+    </div>
+    <div class="form-card banking-form-card" id="beneficiary">
+      <div class="card-heading"><span class="heading-icon">♙</span><div><h2>Manage Payee</h2><p>Add a beneficiary for future transfers</p></div></div>
+      <form method="post" action="/beneficiaries">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label>Nickname<input name="nickname" required></label><label>Name<input name="name" required></label><label>Account number<input name="accountNumber" required></label><label>IFSC<input name="ifsc" placeholder="SBIN0000001" required></label>
+        <button class="outline-button" type="submit">Add beneficiary</button>
+      </form>
+      <div class="beneficiary-list"><h3>Existing Payees</h3><% beneficiaries.forEach(b => { %><div><strong><%= b.nickname %></strong><span>XXXX<%= b.account_number.slice(-4) %> • <%= b.ifsc %></span></div><% }) %></div>
+    </div>
+  </div>
+</section>
+<%- include("partials/footer") %>

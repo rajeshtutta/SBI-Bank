@@ -1,0 +1,161 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = 'ap-south-1'
+        TF_IN_AUTOMATION    = 'true'
+        TF_INPUT            = 'false'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/rajeshtutta/SBI-Bank.git'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Terraform Format Check') {
+            steps {
+                sh '''
+                    docker run --rm \
+                    --volumes-from jenkins \
+                    -w "$WORKSPACE/terraform" \
+                    hashicorp/terraform:1.15.3 \
+                    fmt -check -recursive
+                '''
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws_creds']
+                ]) {
+                    sh '''
+                        docker run --rm \
+                        --volumes-from jenkins \
+                        -w "$WORKSPACE/terraform" \
+                        -e AWS_ACCESS_KEY_ID \
+                        -e AWS_SECRET_ACCESS_KEY \
+                        -e AWS_SESSION_TOKEN \
+                        -e AWS_DEFAULT_REGION \
+                        hashicorp/terraform:1.15.3 \
+                        init -input=false
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                sh '''
+                    docker run --rm \
+                    --volumes-from jenkins \
+                    -w "$WORKSPACE/terraform" \
+                    hashicorp/terraform:1.15.3 \
+                    validate
+                '''
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws_creds']
+                ]) {
+                    sh '''
+                        docker run --rm \
+                        --volumes-from jenkins \
+                        -w "$WORKSPACE/terraform" \
+                        -e AWS_ACCESS_KEY_ID \
+                        -e AWS_SECRET_ACCESS_KEY \
+                        -e AWS_SESSION_TOKEN \
+                        -e AWS_DEFAULT_REGION \
+                        hashicorp/terraform:1.15.3 \
+                        plan \
+                        -input=false \
+                        -out=tfplan
+                    '''
+                }
+            }
+
+            post {
+                always {
+                    archiveArtifacts(
+                        artifacts: 'terraform/tfplan',
+                        allowEmptyArchive: true
+                    )
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws_creds']
+                ]) {
+                    sh '''
+                        docker run --rm \
+                        --volumes-from jenkins \
+                        -w "$WORKSPACE/terraform" \
+                        -e AWS_ACCESS_KEY_ID \
+                        -e AWS_SECRET_ACCESS_KEY \
+                        -e AWS_SESSION_TOKEN \
+                        -e AWS_DEFAULT_REGION \
+                        hashicorp/terraform:1.15.3 \
+                        apply \
+                        -input=false \
+                        -auto-approve \
+                        tfplan
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Output') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws_creds']
+                ]) {
+                    sh '''
+                        docker run --rm \
+                        --volumes-from jenkins \
+                        -w "$WORKSPACE/terraform" \
+                        -e AWS_ACCESS_KEY_ID \
+                        -e AWS_SECRET_ACCESS_KEY \
+                        -e AWS_SESSION_TOKEN \
+                        -e AWS_DEFAULT_REGION \
+                        hashicorp/terraform:1.15.3 \
+                        output
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Terraform infrastructure deployment completed successfully.'
+        }
+
+        failure {
+            echo 'Terraform infrastructure pipeline failed.'
+        }
+    }
+}

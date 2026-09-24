@@ -151,13 +151,12 @@ pipeline {
         }
     }
 
-        stage('Deploy to EKS') {
-        steps {
-            withCredentials([
-            [$class: 'AmazonWebServicesCredentialsBinding',
-             credentialsId: 'aws_creds']
-        ]) {
-            sh '''
+             stage('Deploy to EKS') {
+                 steps {
+                     withCredentials([
+                         [$class: 'AmazonWebServicesCredentialsBinding',
+                          credentialsId: 'aws_creds']]) {
+                         sh '''
                 mkdir -p "$WORKSPACE/.kube"
 
                 docker run --rm \
@@ -232,6 +231,7 @@ pipeline {
         }
     }
 }
+            
     
     post {
         always {

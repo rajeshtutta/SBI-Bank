@@ -156,7 +156,7 @@ pipeline {
         }
 
         stage('Deploy to EKS') {
-    steps {
+            steps {
         withCredentials([
             [
                 $class: 'AmazonWebServicesCredentialsBinding',
@@ -306,5 +306,4 @@ pipeline {
             echo 'SecureBank CI/CD pipeline failed.'
         }
     }
-}
 }

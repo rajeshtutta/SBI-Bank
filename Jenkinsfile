@@ -156,90 +156,140 @@ pipeline {
         }
 
         stage('Deploy to EKS') {
-            steps {
-                withCredentials([
-                    [
-                        $class: 'AmazonWebServicesCredentialsBinding',
-                        credentialsId: 'aws_creds'
-                    ]
-                ]) {
-                    sh '''
-                        mkdir -p "$WORKSPACE/.kube"
+    steps {
+        withCredentials([
+            [
+                $class: 'AmazonWebServicesCredentialsBinding',
+                credentialsId: 'aws_creds'
+            ]
+        ]) {
+            sh '''
+                mkdir -p "$WORKSPACE/.kube"
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e AWS_ACCESS_KEY_ID \
-                        -e AWS_SECRET_ACCESS_KEY \
-                        -e AWS_SESSION_TOKEN \
-                        -e AWS_DEFAULT_REGION \
-                        public.ecr.aws/aws-cli/aws-cli:latest \
-                        eks update-kubeconfig \
-                        --region "$AWS_DEFAULT_REGION" \
-                        --name "$EKS_CLUSTER" \
-                        --kubeconfig "$WORKSPACE/.kube/config"
+                # Create kubeconfig using AWS CLI
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e AWS_ACCESS_KEY_ID \
+                -e AWS_SECRET_ACCESS_KEY \
+                -e AWS_SESSION_TOKEN \
+                -e AWS_DEFAULT_REGION \
+                public.ecr.aws/aws-cli/aws-cli:latest \
+                eks update-kubeconfig \
+                --region "$AWS_DEFAULT_REGION" \
+                --name "$EKS_CLUSTER" \
+                --kubeconfig "$WORKSPACE/.kube/config"
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        apply -f k8s/postgres.yaml
+                # Allow kubectl container to read the kubeconfig
+                chmod 644 "$WORKSPACE/.kube/config"
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        rollout status deployment/postgres \
-                        -n securebank \
-                        --timeout=180s
+                # Generate a temporary EKS authentication token
+                # Disable shell tracing so the token is not printed in Jenkins logs
+                set +x
+                EKS_TOKEN=$(docker run --rm \
+                    -e AWS_ACCESS_KEY_ID \
+                    -e AWS_SECRET_ACCESS_KEY \
+                    -e AWS_SESSION_TOKEN \
+                    -e AWS_DEFAULT_REGION \
+                    public.ecr.aws/aws-cli/aws-cli:latest \
+                    eks get-token \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --cluster-name "$EKS_CLUSTER" \
+                    --query 'status.token' \
+                    --output text)
+                export EKS_TOKEN
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        apply -f k8s/app.yaml
+                # Deploy PostgreSQL
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                apply -f k8s/postgres.yaml
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        set image deployment/securebank-app \
-                        securebank-app="$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_NUMBER" \
-                        -n securebank
+                # Wait for PostgreSQL
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                rollout status deployment/postgres \
+                -n securebank \
+                --timeout=180s
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        rollout status deployment/securebank-app \
-                        -n securebank \
-                        --timeout=300s
+                # Deploy SecureBank
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                apply -f k8s/app.yaml
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        get pods \
-                        -n securebank
+                # Set the exact image produced by this Jenkins build
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                set image deployment/securebank-app \
+                securebank-app="$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_NUMBER" \
+                -n securebank
 
-                        docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        bitnami/kubectl:latest \
-                        get service securebank-app \
-                        -n securebank
-                    '''
-                }
-            }
+                # Wait for SecureBank rollout
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                rollout status deployment/securebank-app \
+                -n securebank \
+                --timeout=300s
+
+                # Show pods
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                get pods \
+                -n securebank
+
+                # Show LoadBalancer service
+                docker run --rm \
+                --volumes-from jenkins \
+                -w "$WORKSPACE" \
+                -e KUBECONFIG="$WORKSPACE/.kube/config" \
+                -e EKS_TOKEN \
+                bitnami/kubectl:latest \
+                kubectl \
+                --token "$EKS_TOKEN" \
+                get service securebank-app \
+                -n securebank
+
+                # Re-enable tracing after sensitive token operations
+                set -x
+            '''
         }
     }
+}
 
     post {
         always {

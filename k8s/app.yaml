@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: securebank-app-secret
+  namespace: securebank
+type: Opaque
+stringData:
+  SESSION_SECRET: "securebank-training-session-secret-change-later"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: securebank-app
+  namespace: securebank
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: securebank-app
+  template:
+    metadata:
+      labels:
+        app: securebank-app
+    spec:
+      containers:
+        - name: securebank-app
+          image: 379367335704.dkr.ecr.ap-south-1.amazonaws.com/securebank-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: securebank-app-secret
+                  key: SESSION_SECRET
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "securebank"
+            - name: DB_USER
+              value: "securebank"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://securebank:securebankpass@postgres:5432/securebank"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: securebank-app
+  namespace: securebank
+spec:
+  type: LoadBalancer
+  selector:
+    app: securebank-app
+  ports:
+    - port: 80
+      targetPort: 3000

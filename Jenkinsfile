@@ -48,7 +48,7 @@ pipeline {
                     --volumes-from jenkins \
                     -w "$WORKSPACE" \
                     node:20-alpine \
-                    npm test -- --runInBand
+                    npm test
                 '''
             }
         }

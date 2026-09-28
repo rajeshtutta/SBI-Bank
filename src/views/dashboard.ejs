@@ -2,16 +2,11 @@
 
 <section class="dashboard-page">
 
-  <!-- =====================================================
-       WELCOME SECTION
-       ===================================================== -->
+  <!-- Welcome Section -->
   <div class="welcome-strip">
 
-    <div class="welcome-content">
-
-      <p class="eyebrow">
-        RELATIONSHIP OVERVIEW
-      </p>
+    <div>
+      <p class="eyebrow">RELATIONSHIP OVERVIEW</p>
 
       <h1>
         Hello <%= user.fullName %>,
@@ -21,13 +16,11 @@
       <p class="muted">
         Manage your accounts, transfers and everyday banking from one place.
       </p>
-
     </div>
 
 
-    <!-- User / Logout -->
+    <!-- User Avatar + Logout -->
     <div
-      class="welcome-user-actions"
       style="
         display: flex;
         align-items: center;
@@ -41,7 +34,7 @@
       </div>
 
 
-      <!-- Logout -->
+      <!-- Logout Button -->
       <form
         method="POST"
         action="/auth/logout"
@@ -56,7 +49,6 @@
 
         <button
           type="submit"
-          class="dashboard-logout-button"
           style="
             background: #6f2da8;
             color: #ffffff;
@@ -79,37 +71,26 @@
   </div>
 
 
-  <!-- =====================================================
-       QUICK ACTIONS
-       ===================================================== -->
+  <!-- Quick Actions -->
   <section class="quick-actions">
 
     <div class="section-heading">
-
-      <h2>
-        Quick Actions
-      </h2>
-
-      <span>
-        Explore everyday banking
-      </span>
-
+      <h2>Quick Actions</h2>
+      <span>Explore everyday banking</span>
     </div>
-
 
     <div class="quick-action-row">
 
       <% const actions = [
-        ["↗", "Refer & Earn"],
-        ["♧", "Save More"],
-        ["▤", "Pay Bills"],
-        ["▥", "Invest Now"],
-        ["▭", "Credit Card"],
-        ["◈", "Learn and Lead"],
-        ["▣", "Get Your Statement"],
-        ["♧", "Get Your Green Score"]
+        ['↗', 'Refer & Earn'],
+        ['♧', 'Save More'],
+        ['▤', 'Pay Bills'],
+        ['▥', 'Invest Now'],
+        ['▭', 'Credit Card'],
+        ['◈', 'Learn and Lead'],
+        ['▣', 'Get Your Statement'],
+        ['♧', 'Get Your Green Score']
       ]; %>
-
 
       <% actions.forEach((a, i) => { %>
 
@@ -118,7 +99,6 @@
           href="#"
           data-demo-action
         >
-
           <span class="quick-icon">
             <%= a[0] %>
           </span>
@@ -126,7 +106,6 @@
           <strong>
             <%= a[1] %>
           </strong>
-
         </a>
 
       <% }) %>
@@ -136,21 +115,14 @@
   </section>
 
 
-  <!-- =====================================================
-       DASHBOARD GRID
-       ===================================================== -->
+  <!-- Dashboard Grid -->
   <div class="dashboard-grid">
 
-
-    <!-- ===================================================
-         MAIN DASHBOARD
-         =================================================== -->
+    <!-- Main Dashboard -->
     <div class="main-dashboard">
 
 
-      <!-- =================================================
-           RELATIONSHIP OVERVIEW
-           ================================================= -->
+      <!-- Relationship Overview -->
       <section
         class="relationship-section"
         id="accounts"
@@ -173,9 +145,7 @@
         <div class="relationship-cards">
 
 
-          <!-- =============================================
-               TRANSACTION ACCOUNTS
-               ============================================= -->
+          <!-- Transaction Accounts -->
           <article class="relationship-card transaction-card">
 
             <div class="card-top">
@@ -190,11 +160,9 @@
 
             </div>
 
-
             <p>
               Combined Balance
             </p>
-
 
             <strong>
               ₹<%= accounts
@@ -203,7 +171,7 @@
                   0
                 )
                 .toLocaleString(
-                  "en-IN",
+                  'en-IN',
                   {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
@@ -211,7 +179,6 @@
                 )
               %>
             </strong>
-
 
             <div class="card-links">
 
@@ -228,9 +195,7 @@
           </article>
 
 
-          <!-- =============================================
-               DEPOSITS
-               ============================================= -->
+          <!-- Deposits -->
           <article class="relationship-card deposits-card">
 
             <div class="soft-art">
@@ -246,8 +211,7 @@
             </h3>
 
             <p>
-              Explore high-yield deposit options in this
-              training portal.
+              Explore high-yield deposit options in this training portal.
             </p>
 
             <a
@@ -260,9 +224,7 @@
           </article>
 
 
-          <!-- =============================================
-               LOANS
-               ============================================= -->
+          <!-- Loans -->
           <article class="relationship-card loans-card">
 
             <div class="soft-art">
@@ -295,9 +257,7 @@
       </section>
 
 
-      <!-- =================================================
-           RECENT TRANSACTIONS
-           ================================================= -->
+      <!-- Recent Transactions -->
       <section
         class="transaction-section"
         id="transactions"
@@ -325,19 +285,14 @@
 
               <div class="transaction-row">
 
-
-                <!-- Transaction Icon -->
                 <div class="txn-icon">
-
-                  <%= t.transaction_type === "TRANSFER"
-                    ? "↔"
-                    : "₹"
+                  <%= t.transaction_type === 'TRANSFER'
+                    ? '↔'
+                    : '₹'
                   %>
-
                 </div>
 
 
-                <!-- Transaction Details -->
                 <div class="txn-main">
 
                   <strong>
@@ -345,37 +300,25 @@
                   </strong>
 
                   <span>
-
-                    <%= new Date(
-                      t.created_at
-                    ).toLocaleString("en-IN") %>
-
+                    <%= new Date(t.created_at).toLocaleString('en-IN') %>
                     •
-
                     <%= t.reference %>
-
                   </span>
 
                 </div>
 
 
-                <!-- Amount -->
                 <div class="txn-amount">
 
-                  ₹<%= Number(
-                    t.amount
-                  ).toLocaleString(
-                    "en-IN",
+                  ₹<%= Number(t.amount).toLocaleString(
+                    'en-IN',
                     {
                       minimumFractionDigits: 2
                     }
                   ) %>
 
-
                   <small
-                    class="status-<%= String(
-                      t.status
-                    ).toLowerCase() %>"
+                    class="status-<%= String(t.status).toLowerCase() %>"
                   >
                     <%= t.status %>
                   </small>
@@ -388,8 +331,7 @@
 
           </div>
 
-
-        <% } else %>
+        <% } else { %>
 
           <div class="empty-state">
             No transactions available yet.
@@ -402,15 +344,11 @@
     </div>
 
 
-    <!-- ===================================================
-         SIDEBAR
-         =================================================== -->
+    <!-- Dashboard Sidebar -->
     <aside class="dashboard-sidebar">
 
 
-      <!-- =================================================
-           BUSINESS LOAN OFFER
-           ================================================= -->
+      <!-- Business Loan -->
       <article class="offer-card">
 
         <div class="offer-badge">
@@ -436,9 +374,7 @@
       </article>
 
 
-      <!-- =================================================
-           INVESTMENTS
-           ================================================= -->
+      <!-- Investments -->
       <article class="side-panel">
 
         <div class="section-heading">
@@ -452,20 +388,13 @@
 
         <div class="side-links">
 
-
           <a
             href="#"
             data-demo-action
           >
-            <span>
-              ♧
-            </span>
-
+            <span>♧</span>
             Mutual Funds
-
-            <b>
-              ›
-            </b>
+            <b>›</b>
           </a>
 
 
@@ -473,15 +402,9 @@
             href="#"
             data-demo-action
           >
-            <span>
-              ▣
-            </span>
-
+            <span>▣</span>
             Demat &amp; Securities
-
-            <b>
-              ›
-            </b>
+            <b>›</b>
           </a>
 
 
@@ -489,15 +412,9 @@
             href="#"
             data-demo-action
           >
-            <span>
-              ♧
-            </span>
-
+            <span>♧</span>
             NPS
-
-            <b>
-              ›
-            </b>
+            <b>›</b>
           </a>
 
 
@@ -505,15 +422,9 @@
             href="#"
             data-demo-action
           >
-            <span>
-              ♧
-            </span>
-
+            <span>♧</span>
             PPF
-
-            <b>
-              ›
-            </b>
+            <b>›</b>
           </a>
 
         </div>
@@ -526,9 +437,5 @@
 
 </section>
 
-
-<!-- =======================================================
-     FOOTER
-     ======================================================= -->
 
 <%- include("partials/footer") %>

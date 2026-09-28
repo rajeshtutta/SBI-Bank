@@ -1,23 +1,142 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login |  YONO SBI </title><link rel="stylesheet" href="/css/sbi-inspired.css"></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Login | YONO SBI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/login.css">
+</head>
 <body class="login-page">
-<header class="login-utility"><div><strong>Personal Banking</strong><span></span><span>Get Help</span></div><div><span></span><span>English ▾</span><span>A-</span><span>A</span><span>A+</span></div></header>
-<header class="login-header"><a class="login-brand" href="/"><span>yono</span><i>●</i><b>SBI</b><big>NET-BANKING </small></a><div class="login-header-note"></div></header>
-<nav class="login-nav"><a class="active" href="/auth/login">Home</a><a href="/auth/login">Accounts &amp; Deposits</a><a href="/auth/login">Loans</a><a href="/auth/login">Cards</a><a href="/auth/login">Investments</a></nav>
-<main class="login-content" id="main">
-  <section class="login-welcome"><div class="hello">Hello!</div><h1>Welcome to the world of YONO SBI</h1><h3>Are you a new user?</h3><p>Choose one of the following options if you are a new user</p><div class="new-user-actions"><a href="/auth/register" class="primary-pill">Register Now</a><a href="/auth/register" class="outline-pill">Activate Username</a></div><p class="account-note">Don’t have an account with SBI? <a href="/auth/register">Open Now</a></p></section>
-  <section class="login-card">
-    <h2>Username / Password</h2>
-    <% if (typeof error !== "undefined") { %><div class="login-error"><%= error %></div><% } %>
-    <form method="post" action="/auth/login">
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zM12 17a5 5 0 110-10 5 5 0 010 10zm0-8a3 3 0 100 6 3 3 0 000-6z"/></symbol>
+  <symbol id="i-kbd" viewBox="0 0 24 24"><path d="M20 5H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zM7 15H5v-2h2v2zm0-3H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8v8a4.5 4.5 0 002.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/></symbol>
+  <symbol id="i-ref" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 108 8h-2a6 6 0 11-1.76-4.24L13 11h7V4l-2.35 2.35z"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 24 24"><path d="M4 10v7h3v-7H4zm6.5 0v7h3v-7h-3zM2 19v3h20v-3H2zm15-9v7h3v-7h-3zM12 1 2 6v2h20V6L12 1z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M3 5h18v14H3V5zm6 3v8l7-4-7-4z"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.6 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.6 3.6a1 1 0 01-.25 1L6.6 10.8z"/></symbol>
+  <symbol id="i-pay" viewBox="0 0 24 24"><path d="M2 5h20v14H2V5zm2 4h16V7H4v2zm0 3v5h16v-5H4z"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></symbol>
+  <symbol id="i-loan" viewBox="0 0 24 24"><path d="M11.8 10.9c-2.3-.6-3-1.2-3-2.1 0-1.1 1-1.8 2.7-1.8 1.8 0 2.4.9 2.5 2.1h2.2c-.1-1.7-1.1-3.2-3-3.7V3h-3v2.4c-1.9.4-3.5 1.7-3.5 3.5 0 2.1 1.7 3.2 4.3 3.8 2.3.6 2.8 1.400 2.8 2.200 0 .6-.4 1.600-2.700 1.600-2 0-2.800-.900-2.900-2.100H6.200c.1 2.200 1.700 3.400 3.600 3.800V21h3v-2.400c1.900-.4 3.500-1.500 3.500-3.500 0-2.800-2.400-3.800-4.500-4.200z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-3 0-8 1.500-8 4.500V21h16v-2.500c0-3-5-4.500-8-4.500z"/></symbol>
+</svg>
+
+<!-- Top utility bar -->
+<div class="topbar">
+  <span class="tab-personal">Personal Banking</span>
+  <nav class="util" aria-label="Utility">
+    <a class="skip" href="#main">Skip to main content</a>
+    <a class="ic" href="#">Corporate website <svg><use href="#i-bank"/></svg></a>
+    <a class="ic" href="#">Get Help <svg><use href="#i-play"/></svg></a>
+    <a class="ic" href="#">WhatsApp <svg><use href="#i-wa"/></svg></a>
+    <button type="button" class="lang">English ▾</button>
+    <span class="fs">
+      <button type="button" data-size="small">A-</button>
+      <button type="button" data-size="normal">A</button>
+      <button type="button" data-size="large">A+</button>
+    </span>
+  </nav>
+</div>
+
+<!-- Header + nav -->
+<header class="header">
+  <a class="logo" href="/" aria-label="YONO SBI Net-Banking">
+    <span class="logo-row"><b>yono</b><i></i><b>SBI</b></span>
+    <small>NET-BANKING</small>
+  </a>
+  <nav class="menu" aria-label="Primary">
+    <a class="active" href="/auth/login">Home</a>
+    <a href="/auth/login">Accounts &amp; Deposits</a>
+    <a href="/auth/login">Loans</a>
+    <a href="/auth/login">Cards</a>
+    <a href="/auth/login">Investments</a>
+  </nav>
+</header>
+
+<main class="hero" id="main">
+  <span class="circle c1"></span><span class="circle c2"></span>
+  <span class="circle c3"></span><span class="circle c4"></span>
+
+  <section class="welcome">
+    <div class="hello">Hello!</div>
+    <h1>Welcome to the world of YONO SBI</h1>
+    <h3>Are you a new user?</h3>
+    <p>Choose one of the following options if you are a new user</p>
+    <div class="cta">
+      <a class="btn btn-fill" href="/auth/register">Register Now</a>
+      <a class="btn btn-line" href="/auth/register">Activate Username</a>
+    </div>
+    <p class="open">Don’t have an account with SBI? <a href="/auth/register">Open Now!</a></p>
+  </section>
+
+  <section class="card" aria-labelledby="card-title">
+    <h2 id="card-title">Username / Password</h2>
+
+    <% if (typeof error !== "undefined" && error) { %>
+      <div class="login-error" role="alert"><%= error %></div>
+    <% } %>
+
+    <form id="loginForm" method="post" action="/auth/login" autocomplete="off">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <label class="material-field">Username<input name="customerId" required autocomplete="username"></label><a class="forgot" href="#">Forgot Username?</a>
-      <label class="material-field password-field">Password<input id="password" type="password" name="password" required autocomplete="current-password"><button class="field-icon eye-button" type="button" onclick="const x=document.getElementById('password');x.type=x.type==='password'?'text':'password'" aria-label="Show or hide password">◉</button><span class="keyboard">⌨</span></label><a class="forgot" href="#">Forgot Password?</a>
-      <div class="captcha-row"><label class="material-field">Enter Captcha<input name="captcha" required autocomplete="off"></label><div class="captcha-box"><%= captcha %></div><button type="button" class="refresh" onclick="location.reload()" aria-label="Refresh captcha">↻</button></div>
-      <button class="big-login" type="submit">LOGIN <span>›</span></button>
+
+      <div class="group">
+        <input class="field" id="customerId" name="customerId" placeholder="Username"
+               aria-label="Username" autocomplete="username" required>
+        <a class="hint" href="#">Forgot Username?</a>
+      </div>
+
+      <div class="group">
+        <div class="pwd-row">
+          <input class="field" id="password" type="password" name="password" placeholder="Password"
+                 aria-label="Password" autocomplete="current-password" required>
+          <button type="button" id="eye" class="icon-plain" aria-label="Show password">
+            <svg><use href="#i-eye"/></svg>
+          </button>
+          <button type="button" class="icon-box" aria-label="Virtual keyboard">
+            <svg><use href="#i-kbd"/></svg>
+          </button>
+        </div>
+        <a class="hint" href="#">Forgot Password?</a>
+      </div>
+
+      <div class="cap-row">
+        <input class="field" id="captcha" name="captcha" placeholder="Enter Captcha"
+               aria-label="Captcha" autocomplete="off" required>
+        <canvas id="captchaImg" class="cap-img" width="150" height="96"
+                data-captcha="<%= captcha %>" role="img" aria-label="Captcha image"></canvas>
+        <div class="cap-btns">
+          <button type="button" id="speak" class="icon-box sm" aria-label="Listen to captcha">
+            <svg><use href="#i-vol"/></svg>
+          </button>
+          <button type="button" id="refresh" class="icon-box sm" aria-label="Refresh captcha">
+            <svg><use href="#i-ref"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <button class="login" id="loginBtn" type="submit">Login</button>
+      <a class="lock" href="#">Lock/Unlock User</a>
     </form>
   </section>
+
+  <div class="wave"></div>
 </main>
-<footer class="login-footer"> — affiliated by SBI.</footer>
-</body></html>
+
+<section class="quick">
+  <h2>Quick Actions</h2>
+  <div class="qa-grid">
+    <a class="qa" href="/auth/login"><svg><use href="#i-swap"/></svg><span>Fund Transfer</span></a>
+    <a class="qa" href="/auth/login"><svg><use href="#i-pay"/></svg><span>Pay Bills</span></a>
+    <a class="qa" href="/auth/login"><svg><use href="#i-loan"/></svg><span>Apply for Loan</span></a>
+    <a class="qa" href="/auth/register"><svg><use href="#i-user"/></svg><span>Open Account</span></a>
+  </div>
+</section>
+<footer class="login-footer">Educational training portal — not affiliated with SBI.</footer>
+
+<script src="/js/login.js" defer></script>
+</body>
+</html>

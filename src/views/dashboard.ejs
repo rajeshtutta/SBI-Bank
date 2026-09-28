@@ -2,10 +2,16 @@
 
 <section class="dashboard-page">
 
-  <!-- Welcome Section -->
+  <!-- =====================================================
+       WELCOME SECTION
+       ===================================================== -->
   <div class="welcome-strip">
-    <div>
-      <p class="eyebrow">RELATIONSHIP OVERVIEW</p>
+
+    <div class="welcome-content">
+
+      <p class="eyebrow">
+        RELATIONSHIP OVERVIEW
+      </p>
 
       <h1>
         Hello <%= user.fullName %>,
@@ -15,60 +21,104 @@
       <p class="muted">
         Manage your accounts, transfers and everyday banking from one place.
       </p>
+
     </div>
 
-    <div class="welcome-actions">
+
+    <!-- User / Logout -->
+    <div
+      class="welcome-user-actions"
+      style="
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      "
+    >
 
       <!-- User Avatar -->
       <div class="welcome-avatar">
-        <%= (user.fullName || 'U').slice(0, 1).toUpperCase() %>
+        <%= (user.fullName || "U").slice(0, 1).toUpperCase() %>
       </div>
 
+
       <!-- Logout -->
-      <form method="POST" action="/auth/logout" class="logout-form">
+      <form
+        method="POST"
+        action="/auth/logout"
+        style="margin: 0;"
+      >
+
         <input
           type="hidden"
           name="_csrf"
           value="<%= csrfToken %>"
         >
 
-        <button type="submit" class="logout-button">
+        <button
+          type="submit"
+          class="dashboard-logout-button"
+          style="
+            background: #6f2da8;
+            color: #ffffff;
+            border: none;
+            padding: 11px 22px;
+            border-radius: 22px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 90px;
+          "
+        >
           Logout
         </button>
+
       </form>
 
     </div>
+
   </div>
 
 
-  <!-- Quick Actions -->
+  <!-- =====================================================
+       QUICK ACTIONS
+       ===================================================== -->
   <section class="quick-actions">
 
     <div class="section-heading">
-      <h2>Quick Actions</h2>
-      <span>Explore everyday banking</span>
+
+      <h2>
+        Quick Actions
+      </h2>
+
+      <span>
+        Explore everyday banking
+      </span>
+
     </div>
+
 
     <div class="quick-action-row">
 
       <% const actions = [
-        ['↗', 'Refer & Earn'],
-        ['♧', 'Save More'],
-        ['▤', 'Pay Bills'],
-        ['▥', 'Invest Now'],
-        ['▭', 'Credit Card'],
-        ['◈', 'Learn and Lead'],
-        ['▣', 'Get Your Statement'],
-        ['♧', 'Get Your Green Score']
+        ["↗", "Refer & Earn"],
+        ["♧", "Save More"],
+        ["▤", "Pay Bills"],
+        ["▥", "Invest Now"],
+        ["▭", "Credit Card"],
+        ["◈", "Learn and Lead"],
+        ["▣", "Get Your Statement"],
+        ["♧", "Get Your Green Score"]
       ]; %>
+
 
       <% actions.forEach((a, i) => { %>
 
         <a
           class="quick-action"
-          href="<%= i === 2 ? '#' : '#' %>"
+          href="#"
           data-demo-action
         >
+
           <span class="quick-icon">
             <%= a[0] %>
           </span>
@@ -76,6 +126,7 @@
           <strong>
             <%= a[1] %>
           </strong>
+
         </a>
 
       <% }) %>
@@ -85,14 +136,25 @@
   </section>
 
 
-  <!-- Dashboard Grid -->
+  <!-- =====================================================
+       DASHBOARD GRID
+       ===================================================== -->
   <div class="dashboard-grid">
 
+
+    <!-- ===================================================
+         MAIN DASHBOARD
+         =================================================== -->
     <div class="main-dashboard">
 
 
-      <!-- Relationship Overview -->
-      <section class="relationship-section" id="accounts">
+      <!-- =================================================
+           RELATIONSHIP OVERVIEW
+           ================================================= -->
+      <section
+        class="relationship-section"
+        id="accounts"
+      >
 
         <div class="section-heading">
 
@@ -111,27 +173,45 @@
         <div class="relationship-cards">
 
 
-          <!-- Transaction Accounts -->
+          <!-- =============================================
+               TRANSACTION ACCOUNTS
+               ============================================= -->
           <article class="relationship-card transaction-card">
 
             <div class="card-top">
-              <span>TRANSACTION ACCOUNTS</span>
-              <span class="card-eye">◉</span>
+
+              <span>
+                TRANSACTION ACCOUNTS
+              </span>
+
+              <span class="card-eye">
+                ◉
+              </span>
+
             </div>
+
 
             <p>
               Combined Balance
             </p>
 
+
             <strong>
               ₹<%= accounts
-                .reduce((sum, a) => sum + Number(a.balance), 0)
-                .toLocaleString('en-IN', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })
+                .reduce(
+                  (sum, a) => sum + Number(a.balance),
+                  0
+                )
+                .toLocaleString(
+                  "en-IN",
+                  {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  }
+                )
               %>
             </strong>
+
 
             <div class="card-links">
 
@@ -148,7 +228,9 @@
           </article>
 
 
-          <!-- Deposits -->
+          <!-- =============================================
+               DEPOSITS
+               ============================================= -->
           <article class="relationship-card deposits-card">
 
             <div class="soft-art">
@@ -164,17 +246,23 @@
             </h3>
 
             <p>
-              Explore high-yield deposit options in this training portal.
+              Explore high-yield deposit options in this
+              training portal.
             </p>
 
-            <a href="#" data-demo-action>
+            <a
+              href="#"
+              data-demo-action
+            >
               Explore
             </a>
 
           </article>
 
 
-          <!-- Loans -->
+          <!-- =============================================
+               LOANS
+               ============================================= -->
           <article class="relationship-card loans-card">
 
             <div class="soft-art">
@@ -193,7 +281,10 @@
               Explore loan journeys as demo modules.
             </p>
 
-            <a href="#" data-demo-action>
+            <a
+              href="#"
+              data-demo-action
+            >
               Manage loans
             </a>
 
@@ -204,8 +295,13 @@
       </section>
 
 
-      <!-- Recent Transactions -->
-      <section class="transaction-section" id="transactions">
+      <!-- =================================================
+           RECENT TRANSACTIONS
+           ================================================= -->
+      <section
+        class="transaction-section"
+        id="transactions"
+      >
 
         <div class="section-heading">
 
@@ -229,11 +325,19 @@
 
               <div class="transaction-row">
 
+
+                <!-- Transaction Icon -->
                 <div class="txn-icon">
-                  <%= t.transaction_type === 'TRANSFER' ? '↔' : '₹' %>
+
+                  <%= t.transaction_type === "TRANSFER"
+                    ? "↔"
+                    : "₹"
+                  %>
+
                 </div>
 
 
+                <!-- Transaction Details -->
                 <div class="txn-main">
 
                   <strong>
@@ -241,22 +345,37 @@
                   </strong>
 
                   <span>
-                    <%= new Date(t.created_at).toLocaleString('en-IN') %>
+
+                    <%= new Date(
+                      t.created_at
+                    ).toLocaleString("en-IN") %>
+
                     •
+
                     <%= t.reference %>
+
                   </span>
 
                 </div>
 
 
+                <!-- Amount -->
                 <div class="txn-amount">
 
-                  ₹<%= Number(t.amount).toLocaleString('en-IN', {
-                    minimumFractionDigits: 2
-                  }) %>
+                  ₹<%= Number(
+                    t.amount
+                  ).toLocaleString(
+                    "en-IN",
+                    {
+                      minimumFractionDigits: 2
+                    }
+                  ) %>
+
 
                   <small
-                    class="status-<%= String(t.status).toLowerCase() %>"
+                    class="status-<%= String(
+                      t.status
+                    ).toLowerCase() %>"
                   >
                     <%= t.status %>
                   </small>
@@ -269,7 +388,8 @@
 
           </div>
 
-        <% } else { %>
+
+        <% } else %>
 
           <div class="empty-state">
             No transactions available yet.
@@ -282,11 +402,15 @@
     </div>
 
 
-    <!-- Sidebar -->
+    <!-- ===================================================
+         SIDEBAR
+         =================================================== -->
     <aside class="dashboard-sidebar">
 
 
-      <!-- Offer Card -->
+      <!-- =================================================
+           BUSINESS LOAN OFFER
+           ================================================= -->
       <article class="offer-card">
 
         <div class="offer-badge">
@@ -312,7 +436,9 @@
       </article>
 
 
-      <!-- Investments -->
+      <!-- =================================================
+           INVESTMENTS
+           ================================================= -->
       <article class="side-panel">
 
         <div class="section-heading">
@@ -326,39 +452,83 @@
 
         <div class="side-links">
 
-          <a href="#" data-demo-action>
-            <span>♧</span>
+
+          <a
+            href="#"
+            data-demo-action
+          >
+            <span>
+              ♧
+            </span>
+
             Mutual Funds
-            <b>›</b>
+
+            <b>
+              ›
+            </b>
           </a>
 
-          <a href="#" data-demo-action>
-            <span>▣</span>
+
+          <a
+            href="#"
+            data-demo-action
+          >
+            <span>
+              ▣
+            </span>
+
             Demat &amp; Securities
-            <b>›</b>
+
+            <b>
+              ›
+            </b>
           </a>
 
-          <a href="#" data-demo-action>
-            <span>♧</span>
+
+          <a
+            href="#"
+            data-demo-action
+          >
+            <span>
+              ♧
+            </span>
+
             NPS
-            <b>›</b>
+
+            <b>
+              ›
+            </b>
           </a>
 
-          <a href="#" data-demo-action>
-            <span>♧</span>
+
+          <a
+            href="#"
+            data-demo-action
+          >
+            <span>
+              ♧
+            </span>
+
             PPF
-            <b>›</b>
+
+            <b>
+              ›
+            </b>
           </a>
 
         </div>
 
       </article>
 
-
     </aside>
 
   </div>
 
 </section>
+
+
+<!-- =======================================================
+     FOOTER
+     ======================================================= -->
 
 <%- include("partials/footer") %>

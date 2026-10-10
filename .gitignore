@@ -1,6 +1,18 @@
+
+# Dependencies
 node_modules/
+
+# Environment files and secrets
 .env
+.env.*
+!.env.example
+
+# Logs
 npm-debug.log*
-coverage/
-.DS_Store
 *.log
+
+# Test coverage
+coverage/
+
+# OS files
+.DS_Store

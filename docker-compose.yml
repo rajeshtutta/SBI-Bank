@@ -1,5 +1,5 @@
-services:
 
+services:
   postgres:
     image: postgres:16-alpine
     container_name: securebank-postgres
@@ -7,21 +7,22 @@ services:
 
     environment:
       POSTGRES_DB: securebank
-      POSTGRES_USER: securebank
-      POSTGRES_PASSWORD: securebankpass
+      POSTGRES_USER: ${DB_USER:?Set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
 
-    ports:
-      - "5432:5432"
+    # Do not expose PostgreSQL publicly unless required.
+    # Uncomment only if you specifically need host access.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U securebank -d securebank"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d securebank"]
       interval: 5s
       timeout: 5s
       retries: 10
-
 
   app:
     build: .
@@ -33,19 +34,18 @@ services:
         condition: service_healthy
 
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3000
-      SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: securebank
-      DB_USER: securebank
-      DB_PASSWORD: securebankpass
-      DATABASE_URL: postgresql://securebank:securebankpass@postgres:5432/securebank
+      DB_USER: ${DB_USER:?Set DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
 
     ports:
       - "3000:3000"
-
 
 volumes:
   postgres_data:

@@ -218,6 +218,7 @@ pipeline {
         }
 
         
+
 stage('Diagnose EKS Node Group') {
     steps {
         withCredentials([[
@@ -225,9 +226,25 @@ stage('Diagnose EKS Node Group') {
             credentialsId: 'aws_creds'
         ]]) {
             sh '''
-                aws sts get-caller-identity
+                set +x
 
-                aws eks describe-nodegroup \
+                docker run --rm \
+                  --volumes-from jenkins \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION=ap-south-1 \
+                  public.ecr.aws/aws-cli/aws-cli:latest \
+                  sts get-caller-identity
+
+                docker run --rm \
+                  --volumes-from jenkins \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION=ap-south-1 \
+                  public.ecr.aws/aws-cli/aws-cli:latest \
+                  eks describe-nodegroup \
                   --cluster-name securebank-eks \
                   --nodegroup-name securebank-nodes \
                   --region ap-south-1 \
@@ -237,6 +254,7 @@ stage('Diagnose EKS Node Group') {
         }
     }
 }
+
 
         
         

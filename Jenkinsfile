@@ -290,6 +290,62 @@ stage('Wait for EKS Cluster') {
     }
 }
 
+        
+stage('Create EKS Node Group') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws_creds'
+        ]]) {
+            sh '''
+                set +x
+
+                CLUSTER_NAME="securebank-eks"
+                NODEGROUP_NAME="securebank-nodes"
+                AWS_REGION="ap-south-1"
+                NODE_ROLE_ARN="arn:aws:iam::379367335704:role/securebank-node-role"
+
+                AWS_CLI="docker run --rm \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION=$AWS_REGION \
+                  public.ecr.aws/aws-cli/aws-cli:latest"
+
+                if $AWS_CLI eks describe-nodegroup \
+                    --cluster-name "$CLUSTER_NAME" \
+                    --nodegroup-name "$NODEGROUP_NAME" \
+                    --region "$AWS_REGION" >/dev/null 2>&1; then
+
+                    echo "Node group already exists."
+                else
+                    echo "Creating EKS node group..."
+
+                    $AWS_CLI eks create-nodegroup \
+                      --cluster-name "$CLUSTER_NAME" \
+                      --nodegroup-name "$NODEGROUP_NAME" \
+                      --region "$AWS_REGION" \
+                      --node-role "$NODE_ROLE_ARN" \
+                      --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
+                      --instance-types t3.medium \
+                      --scaling-config minSize=1,maxSize=2,desiredSize=2 \
+                      --ami-type AL2023_x86_64_STANDARD \
+                      --capacity-type ON_DEMAND
+                fi
+
+                echo "Waiting for node group to become ACTIVE..."
+
+                $AWS_CLI eks wait nodegroup-active \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NODEGROUP_NAME" \
+                  --region "$AWS_REGION"
+
+                echo "EKS node group is ACTIVE."
+            '''
+        }
+    }
+}
+
 
         stage('Deploy to EKS') {
             steps {

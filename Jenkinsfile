@@ -1,54 +1,68 @@
+```groovy
 pipeline {
     agent any
 
     options {
+        timeout(time: 45, unit: 'MINUTES')
         timestamps()
         disableConcurrentBuilds()
     }
 
     environment {
         AWS_DEFAULT_REGION = 'ap-south-1'
-        ECR_REGISTRY       = '379367335704.dkr.ecr.ap-south-1.amazonaws.com'
-        ECR_REPOSITORY     = 'securebank-app'
-        IMAGE_NAME         = 'securebank-app'
         EKS_CLUSTER        = 'securebank-eks'
+        IMAGE_NAME         = 'sbi-bank'
+        K8S_NAMESPACE      = 'securebank'
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout GitHub') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/rajeshtutta/SBI-Bank.git',
-                        credentialsId: 'github-cred'
-                    ]]
-                ])
+                git branch: 'main',
+                    url: 'https://github.com/rajeshtutta/SBI-Bank.git'
+            }
+        }
+
+        stage('Gitleaks Secret Scan') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      zricethezav/gitleaks:latest \
+                      detect --source . --no-git --redact --exit-code 1
+                '''
+            }
+        }
+
+        stage('Check Node.js and npm') {
+            steps {
+                sh '''
+                    docker run --rm node:20-alpine node --version
+                    docker run --rm node:20-alpine npm --version
+                '''
             }
         }
 
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    docker run --rm \
-                    --volumes-from jenkins \
-                    -w "$WORKSPACE" \
-                    node:20-alpine \
-                    npm ci
+                    docker run --rm --user 1000:1000 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      node:20-alpine npm ci
                 '''
             }
         }
 
-        stage('Run Tests') {
+        stage('SCA - npm Audit') {
             steps {
                 sh '''
-                    docker run --rm \
-                    --volumes-from jenkins \
-                    -w "$WORKSPACE" \
-                    node:20-alpine \
-                    npm test
+                    docker run --rm --user 1000:1000 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      node:20-alpine npm audit --audit-level=high
                 '''
             }
         }
@@ -62,25 +76,24 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        rm -rf dependency-check-report
+                        set +x
                         mkdir -p dependency-check-report
 
                         docker run --rm \
-                        --user root \
-                        --volumes-from jenkins \
-                        -v dependency-check-data:/usr/share/dependency-check/data \
-                        -w "$WORKSPACE" \
-                        owasp/dependency-check:latest \
-                        --project SecureBank \
-                        --scan package.json \
-                        --scan package-lock.json \
-                        --format HTML \
-                        --nvdApiKey "$NVD_API_KEY" \
-                        --out dependency-check-report
+                          --user root \
+                          --volumes-from jenkins \
+                          -v dependency-check-data:/usr/share/dependency-check/data \
+                          -w "$WORKSPACE" \
+                          owasp/dependency-check:latest \
+                          --project SBI-Bank \
+                          --scan package.json \
+                          --scan package-lock.json \
+                          --format HTML \
+                          --nvdApiKey "$NVD_API_KEY" \
+                          --out dependency-check-report
                     '''
                 }
             }
-
             post {
                 always {
                     archiveArtifacts(
@@ -92,64 +105,102 @@ pipeline {
             }
         }
 
+        stage('SAST - SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonarqube-token',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            set +x
+
+                            docker run --rm \
+                              --volumes-from jenkins \
+                              -w "$WORKSPACE" \
+                              -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+                              -e SONAR_TOKEN \
+                              sonarsource/sonar-scanner-cli:latest \
+                              -Dsonar.projectKey=SBI-Bank \
+                              -Dsonar.projectName=SBI-Bank \
+                              -Dsonar.sources=. \
+                              -Dsonar.exclusions=node_modules/**,coverage/**,dependency-check-report/** \
+                              -Dsonar.scm.disabled=true
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Run Unit Tests') {
+            steps {
+                sh '''
+                    docker run --rm --user 1000:1000 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      node:20-alpine npm test
+                '''
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh '''
                     docker build \
-                    -t ${IMAGE_NAME}:${BUILD_NUMBER} \
-                    -t ${IMAGE_NAME}:latest .
+                      -t ${IMAGE_NAME}:${BUILD_NUMBER} \
+                      -t ${IMAGE_NAME}:latest .
                 '''
             }
         }
 
-        stage('Trivy Container Scan') {
+        stage('Trivy Image Scan') {
             steps {
                 sh '''
                     docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest \
-                    image \
-                    --scanners vuln \
-                    --severity HIGH,CRITICAL \
-                    ${IMAGE_NAME}:${BUILD_NUMBER}
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy-cache:/root/.cache/ \
+                      aquasec/trivy:latest \
+                      image \
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      --format table \
+                      ${IMAGE_NAME}:${BUILD_NUMBER}
                 '''
             }
         }
 
-        stage('Push Image to ECR') {
+        stage('Push Image to Docker Hub') {
             steps {
                 withCredentials([
-                    [
-                        $class: 'AmazonWebServicesCredentialsBinding',
-                        credentialsId: 'aws_creds'
-                    ]
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
                 ]) {
                     sh '''
-                        docker run --rm \
-                        -e AWS_ACCESS_KEY_ID \
-                        -e AWS_SECRET_ACCESS_KEY \
-                        -e AWS_SESSION_TOKEN \
-                        -e AWS_DEFAULT_REGION \
-                        public.ecr.aws/aws-cli/aws-cli:latest \
-                        ecr get-login-password \
-                        --region "$AWS_DEFAULT_REGION" |
-                        docker login \
-                        --username AWS \
-                        --password-stdin "$ECR_REGISTRY"
+                        set +x
 
-                        docker tag \
-                        ${IMAGE_NAME}:${BUILD_NUMBER} \
-                        ${ECR_REGISTRY}/${ECR_REPOSITORY}:${BUILD_NUMBER}
+                        IMAGE="$DOCKERHUB_USER/$IMAGE_NAME"
 
-                        docker tag \
-                        ${IMAGE_NAME}:${BUILD_NUMBER} \
-                        ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+                        printf '%s' "$DOCKERHUB_TOKEN" | \
+                          docker login \
+                            --username "$DOCKERHUB_USER" \
+                            --password-stdin
 
-                        docker push \
-                        ${ECR_REGISTRY}/${ECR_REPOSITORY}:${BUILD_NUMBER}
+                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} \
+                          "$IMAGE:${BUILD_NUMBER}"
 
-                        docker push \
-                        ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} \
+                          "$IMAGE:latest"
+
+                        docker push "$IMAGE:${BUILD_NUMBER}"
+                        docker push "$IMAGE:latest"
+
+                        docker logout
                     '''
                 }
             }
@@ -161,122 +212,126 @@ pipeline {
                     [
                         $class: 'AmazonWebServicesCredentialsBinding',
                         credentialsId: 'aws_creds'
-                    ]
+                    ],
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
                 ]) {
                     sh '''
+                        set +x
+
                         mkdir -p "$WORKSPACE/.kube"
 
-                        # Create kubeconfig for EKS
+                        # Generate EKS kubeconfig
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e AWS_ACCESS_KEY_ID \
-                        -e AWS_SECRET_ACCESS_KEY \
-                        -e AWS_SESSION_TOKEN \
-                        -e AWS_DEFAULT_REGION \
-                        public.ecr.aws/aws-cli/aws-cli:latest \
-                        eks update-kubeconfig \
-                        --region "$AWS_DEFAULT_REGION" \
-                        --name "$EKS_CLUSTER" \
-                        --kubeconfig "$WORKSPACE/.kube/config"
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e AWS_ACCESS_KEY_ID \
+                          -e AWS_SECRET_ACCESS_KEY \
+                          -e AWS_SESSION_TOKEN \
+                          -e AWS_DEFAULT_REGION \
+                          public.ecr.aws/aws-cli/aws-cli:latest \
+                          eks update-kubeconfig \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --name "$EKS_CLUSTER" \
+                          --kubeconfig "$WORKSPACE/.kube/config"
 
-                        # Allow kubectl container to read kubeconfig
                         chmod 644 "$WORKSPACE/.kube/config"
 
                         # Generate temporary EKS authentication token
-                        set +x
-
                         EKS_TOKEN=$(docker run --rm \
-                            -e AWS_ACCESS_KEY_ID \
-                            -e AWS_SECRET_ACCESS_KEY \
-                            -e AWS_SESSION_TOKEN \
-                            -e AWS_DEFAULT_REGION \
-                            public.ecr.aws/aws-cli/aws-cli:latest \
-                            eks get-token \
-                            --region "$AWS_DEFAULT_REGION" \
-                            --cluster-name "$EKS_CLUSTER" \
-                            --query 'status.token' \
-                            --output text)
+                          -e AWS_ACCESS_KEY_ID \
+                          -e AWS_SECRET_ACCESS_KEY \
+                          -e AWS_SESSION_TOKEN \
+                          -e AWS_DEFAULT_REGION \
+                          public.ecr.aws/aws-cli/aws-cli:latest \
+                          eks get-token \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --cluster-name "$EKS_CLUSTER" \
+                          --query 'status.token' \
+                          --output text)
 
                         export EKS_TOKEN
+                        export KUBECONFIG="$WORKSPACE/.kube/config"
 
                         # Deploy PostgreSQL
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        apply -f k8s/postgres.yaml
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          apply -f k8s/postgres.yaml
 
                         # Wait for PostgreSQL
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        rollout status deployment/postgres \
-                        -n securebank \
-                        --timeout=180s
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          rollout status deployment/postgres \
+                          -n "$K8S_NAMESPACE" \
+                          --timeout=180s
 
-                        # Deploy SecureBank
+                        # Deploy application manifests
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        apply -f k8s/app.yaml
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          apply -f k8s/app.yaml
 
-                        # Use the exact image from this Jenkins build
+                        # Update deployment to use Docker Hub image
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        set image deployment/securebank-app \
-                        securebank-app="$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_NUMBER" \
-                        -n securebank
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          set image deployment/securebank-app \
+                          securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
+                          -n "$K8S_NAMESPACE"
 
-                        # Wait for SecureBank rollout
+                        # Wait for application rollout
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        rollout status deployment/securebank-app \
-                        -n securebank \
-                        --timeout=300s
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          rollout status deployment/securebank-app \
+                          -n "$K8S_NAMESPACE" \
+                          --timeout=300s
 
-                        # Show application pods
+                        # Display application pods
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        get pods \
-                        -n securebank
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          get pods -n "$K8S_NAMESPACE"
 
-                        # Show application LoadBalancer
+                        # Display application LoadBalancer service
                         docker run --rm \
-                        --volumes-from jenkins \
-                        -w "$WORKSPACE" \
-                        -e KUBECONFIG="$WORKSPACE/.kube/config" \
-                        -e EKS_TOKEN \
-                        bitnami/kubectl:latest \
-                        --token "$EKS_TOKEN" \
-                        get service securebank-app \
-                        -n securebank
+                          --volumes-from jenkins \
+                          -w "$WORKSPACE" \
+                          -e KUBECONFIG \
+                          -e EKS_TOKEN \
+                          bitnami/kubectl:latest \
+                          --token "$EKS_TOKEN" \
+                          get service securebank-app \
+                          -n "$K8S_NAMESPACE"
                     '''
                 }
             }
@@ -286,16 +341,19 @@ pipeline {
     post {
         always {
             sh '''
+                docker logout >/dev/null 2>&1 || true
                 docker image prune -f || true
             '''
+            echo 'SBI Bank DevSecOps pipeline execution finished.'
         }
 
         success {
-            echo 'SecureBank CI/CD pipeline completed successfully.'
+            echo 'SBI Bank DevSecOps pipeline completed successfully.'
         }
 
         failure {
-            echo 'SecureBank CI/CD pipeline failed.'
+            echo 'Pipeline failed. Check Console Output.'
         }
     }
 }
+```

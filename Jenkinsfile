@@ -114,36 +114,36 @@ stage('Install Dependencies') {
             }
         }
 
-        stage('SAST - SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarQube') {
-                    withCredentials([
-                        string(
-                            credentialsId: 'sonarqube-token',
-                            variable: 'SONAR_TOKEN'
-                        )
-                    ]) {
-                        sh '''
-                            set +x
+        
+stage('SAST - SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('SonarQube') {
+            withCredentials([
+                string(
+                    credentialsId: 'sonarqube-token',
+                    variable: 'SONAR_TOKEN'
+                )
+            ]) {
+                sh '''
+                    set -eu
 
-                            docker run --rm \
-                            --volumes-from jenkins \
-                            -v "$WORKSPACE:/usr/src" \
-                            -w /usr/src \
-                            -e SONAR_HOST_URL="$SONAR_HOST_URL" \
-                            -e SONAR_TOKEN \
-                             sonarsource/sonar-scanner-cli:latest \
-                            -Dsonar.projectKey=SBI-Bank \
-                            -Dsonar.projectName=SBI-Bank \
-                            -Dsonar.sources=. \
-                            -Dsonar.working.directory=.scannerwork \
-                            -Dsonar.exclusions=node_modules/**,coverage/**,dependency-check-report/** \
-                            -Dsonar.scm.disabled=true
-                            '''
-                    }
-                }
+                    docker run --rm \
+                      --user 0:0 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+                      -e SONAR_TOKEN="$SONAR_TOKEN" \
+                      sonarsource/sonar-scanner-cli:latest \
+                      -Dsonar.projectKey=SBI-Bank \
+                      -Dsonar.projectName=SBI-Bank \
+                      -Dsonar.sources=. \
+                      -Dsonar.exclusions=node_modules/**,coverage/**,dependency-check-report/**,.kube/** \
+                      -Dsonar.scm.disabled=true
+                '''
             }
         }
+    }
+}
 
         stage('Run Unit Tests') {
             steps {

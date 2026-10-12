@@ -216,6 +216,7 @@ stage('Install Dependencies') {
         }
 
         
+
 stage('Create EKS Cluster') {
     steps {
         withCredentials([[
@@ -227,11 +228,13 @@ stage('Create EKS Cluster') {
 
                 CLUSTER_NAME="securebank-eks"
                 AWS_REGION="ap-south-1"
+                CLUSTER_ROLE_ARN="arn:aws:iam::379367335704:role/securebank-eks-cluster-role"
 
                 if docker run --rm \
                     -e AWS_ACCESS_KEY_ID \
                     -e AWS_SECRET_ACCESS_KEY \
                     -e AWS_SESSION_TOKEN \
+                    -e AWS_DEFAULT_REGION="$AWS_REGION" \
                     public.ecr.aws/aws-cli/aws-cli:latest \
                     eks describe-cluster \
                     --name "$CLUSTER_NAME" \
@@ -252,7 +255,7 @@ stage('Create EKS Cluster') {
                         eks create-cluster \
                         --name "$CLUSTER_NAME" \
                         --region "$AWS_REGION" \
-                        --role-arn "REPLACE_WITH_EKS_CLUSTER_ROLE_ARN" \
+                        --role-arn "$CLUSTER_ROLE_ARN" \
                         --resources-vpc-config \
                         subnetIds=subnet-REPLACE1,subnet-REPLACE2
                 fi

@@ -217,6 +217,29 @@ pipeline {
             }
         }
 
+        
+stage('Diagnose EKS Node Group') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws_creds'
+        ]]) {
+            sh '''
+                aws sts get-caller-identity
+
+                aws eks describe-nodegroup \
+                  --cluster-name securebank-eks \
+                  --nodegroup-name securebank-nodes \
+                  --region ap-south-1 \
+                  --query 'nodegroup.{Status:status,InstanceTypes:instanceTypes,Issues:health.issues}' \
+                  --output json
+            '''
+        }
+    }
+}
+
+        
+        
         stage('Create EKS Cluster') {
             steps {
                 withCredentials([[

@@ -1,0 +1,7 @@
+.kube/
+.git/
+node_modules/
+dependency-check-report/
+coverage/
+.env
+.env.*

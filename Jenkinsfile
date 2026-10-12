@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -10,6 +11,7 @@ pipeline {
     environment {
         AWS_DEFAULT_REGION = 'ap-south-1'
         EKS_CLUSTER        = 'securebank-eks'
+        NODE_ROLE_ARN      = 'arn:aws:iam::379367335704:role/securebank-node-role'
         IMAGE_NAME         = 'sbi-bank'
         K8S_NAMESPACE      = 'securebank'
     }
@@ -44,27 +46,26 @@ pipeline {
             }
         }
 
-stage('Install Dependencies') {
-    steps {
-        sh '''
-            # Remove old dependencies and reinstall cleanly
-            docker run --rm \
-              --user root \
-              --volumes-from jenkins \
-              -w "$WORKSPACE" \
-              node:20-alpine \
-              sh -c 'rm -rf node_modules && npm ci'
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      --user root \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      node:20-alpine \
+                      sh -c 'rm -rf node_modules && npm ci'
 
-            # Restore workspace ownership for Jenkins user
-            docker run --rm \
-              --user root \
-              --volumes-from jenkins \
-              -w "$WORKSPACE" \
-              node:20-alpine \
-              chown -R 1000:1000 node_modules
-        '''
-    }
-}
+                    docker run --rm \
+                      --user root \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      node:20-alpine \
+                      chown -R 1000:1000 node_modules
+                '''
+            }
+        }
+
         stage('SCA - npm Audit') {
             steps {
                 sh '''
@@ -114,36 +115,35 @@ stage('Install Dependencies') {
             }
         }
 
-        
-stage('SAST - SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('SonarQube') {
-            withCredentials([
-                string(
-                    credentialsId: 'sonarqube-token',
-                    variable: 'SONAR_TOKEN'
-                )
-            ]) {
-                sh '''
-                    set -eu
+        stage('SAST - SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonarqube-token',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            set -eu
 
-                    docker run --rm \
-                      --user 0:0 \
-                      --volumes-from jenkins \
-                      -w "$WORKSPACE" \
-                      -e SONAR_HOST_URL="$SONAR_HOST_URL" \
-                      -e SONAR_TOKEN="$SONAR_TOKEN" \
-                      sonarsource/sonar-scanner-cli:latest \
-                      -Dsonar.projectKey=SBI-Bank \
-                      -Dsonar.projectName=SBI-Bank \
-                      -Dsonar.sources=. \
-                      -Dsonar.exclusions=node_modules/**,coverage/**,dependency-check-report/**,.kube/** \
-                      -Dsonar.scm.disabled=true
-                '''
+                            docker run --rm \
+                              --user 0:0 \
+                              --volumes-from jenkins \
+                              -w "$WORKSPACE" \
+                              -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+                              -e SONAR_TOKEN="$SONAR_TOKEN" \
+                              sonarsource/sonar-scanner-cli:latest \
+                              -Dsonar.projectKey=SBI-Bank \
+                              -Dsonar.projectName=SBI-Bank \
+                              -Dsonar.sources=. \
+                              -Dsonar.exclusions=node_modules/**,coverage/**,dependency-check-report/**,.kube/** \
+                              -Dsonar.scm.disabled=true
+                        '''
+                    }
+                }
             }
         }
-    }
-}
 
         stage('Run Unit Tests') {
             steps {
@@ -217,137 +217,138 @@ stage('SAST - SonarQube Analysis') {
             }
         }
 
-        
+        stage('Create EKS Cluster') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws_creds'
+                ]]) {
+                    sh '''
+                        set +x
 
-stage('Create EKS Cluster') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws_creds'
-        ]]) {
-            sh '''
-                set +x
+                        if docker run --rm \
+                            -e AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY \
+                            -e AWS_SESSION_TOKEN \
+                            -e AWS_DEFAULT_REGION \
+                            public.ecr.aws/aws-cli/aws-cli:latest \
+                            eks describe-cluster \
+                            --name "$EKS_CLUSTER" \
+                            --region "$AWS_DEFAULT_REGION" \
+                            >/dev/null 2>&1; then
 
-                CLUSTER_NAME="securebank-eks"
-                AWS_REGION="ap-south-1"
-                CLUSTER_ROLE_ARN="arn:aws:iam::379367335704:role/securebank-eks-cluster-role"
+                            echo "EKS cluster already exists."
 
-                if docker run --rm \
-                    -e AWS_ACCESS_KEY_ID \
-                    -e AWS_SECRET_ACCESS_KEY \
-                    -e AWS_SESSION_TOKEN \
-                    -e AWS_DEFAULT_REGION="$AWS_REGION" \
-                    public.ecr.aws/aws-cli/aws-cli:latest \
-                    eks describe-cluster \
-                    --name "$CLUSTER_NAME" \
-                    --region "$AWS_REGION" \
-                    >/dev/null 2>&1; then
+                        else
+                            echo "Creating EKS cluster..."
 
-                    echo "EKS cluster already exists."
-
-                else
-                    echo "Creating EKS cluster..."
-
-                    docker run --rm \
-                        -e AWS_ACCESS_KEY_ID \
-                        -e AWS_SECRET_ACCESS_KEY \
-                        -e AWS_SESSION_TOKEN \
-                        -e AWS_DEFAULT_REGION="$AWS_REGION" \
-                        public.ecr.aws/aws-cli/aws-cli:latest \
-                        eks create-cluster \
-                        --name "$CLUSTER_NAME" \
-                        --region "$AWS_REGION" \
-                        --role-arn "$CLUSTER_ROLE_ARN" \
-                        --resources-vpc-config \
-                        subnetIds=subnet-08c52e76b8d01fec1,subnet-01d3ce46e0e95325c
-fi
-            '''
+                            docker run --rm \
+                              -e AWS_ACCESS_KEY_ID \
+                              -e AWS_SECRET_ACCESS_KEY \
+                              -e AWS_SESSION_TOKEN \
+                              -e AWS_DEFAULT_REGION \
+                              public.ecr.aws/aws-cli/aws-cli:latest \
+                              eks create-cluster \
+                              --name "$EKS_CLUSTER" \
+                              --region "$AWS_DEFAULT_REGION" \
+                              --role-arn arn:aws:iam::379367335704:role/securebank-eks-cluster-role \
+                              --resources-vpc-config \
+                              subnetIds=subnet-08c52e76b8d01fec1,subnet-01d3ce46e0e95325c
+                        fi
+                    '''
+                }
+            }
         }
-    }
-}
 
-        
-stage('Wait for EKS Cluster') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws_creds'
-        ]]) {
-            sh '''
-                set +x
+        stage('Wait for EKS Cluster') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws_creds'
+                ]]) {
+                    sh '''
+                        set +x
 
-                docker run --rm \
-                  -e AWS_ACCESS_KEY_ID \
-                  -e AWS_SECRET_ACCESS_KEY \
-                  -e AWS_SESSION_TOKEN \
-                  -e AWS_DEFAULT_REGION="ap-south-1" \
-                  public.ecr.aws/aws-cli/aws-cli:latest \
-                  eks wait cluster-active \
-                  --name securebank-eks \
-                  --region ap-south-1
+                        docker run --rm \
+                          -e AWS_ACCESS_KEY_ID \
+                          -e AWS_SECRET_ACCESS_KEY \
+                          -e AWS_SESSION_TOKEN \
+                          -e AWS_DEFAULT_REGION \
+                          public.ecr.aws/aws-cli/aws-cli:latest \
+                          eks wait cluster-active \
+                          --name "$EKS_CLUSTER" \
+                          --region "$AWS_DEFAULT_REGION"
 
-                echo "EKS cluster is ACTIVE."
-            '''
+                        echo "EKS cluster is ACTIVE."
+                    '''
+                }
+            }
         }
-    }
-}
 
-        
-stage('Create EKS Node Group') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws_creds'
-        ]]) {
-            sh '''
-                set +x
+        stage('Create EKS Node Group') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws_creds'
+                ]]) {
+                    sh '''
+                        set +x
 
-                CLUSTER_NAME="securebank-eks"
-                NODEGROUP_NAME="securebank-nodes"
-                AWS_REGION="ap-south-1"
-                NODE_ROLE_ARN="arn:aws:iam::379367335704:role/securebank-node-role"
+                        NODEGROUP_NAME="securebank-nodes"
 
-                AWS_CLI="docker run --rm \
-                  -e AWS_ACCESS_KEY_ID \
-                  -e AWS_SECRET_ACCESS_KEY \
-                  -e AWS_SESSION_TOKEN \
-                  -e AWS_DEFAULT_REGION=$AWS_REGION \
-                  public.ecr.aws/aws-cli/aws-cli:latest"
+                        if docker run --rm \
+                            -e AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY \
+                            -e AWS_SESSION_TOKEN \
+                            -e AWS_DEFAULT_REGION \
+                            public.ecr.aws/aws-cli/aws-cli:latest \
+                            eks describe-nodegroup \
+                            --cluster-name "$EKS_CLUSTER" \
+                            --nodegroup-name "$NODEGROUP_NAME" \
+                            --region "$AWS_DEFAULT_REGION" \
+                            >/dev/null 2>&1; then
 
-                if $AWS_CLI eks describe-nodegroup \
-                    --cluster-name "$CLUSTER_NAME" \
-                    --nodegroup-name "$NODEGROUP_NAME" \
-                    --region "$AWS_REGION" >/dev/null 2>&1; then
+                            echo "Node group already exists."
 
-                    echo "Node group already exists."
-                else
-                    echo "Creating EKS node group..."
+                        else
+                            echo "Creating EKS node group..."
 
-                    $AWS_CLI eks create-nodegroup \
-                      --cluster-name "$CLUSTER_NAME" \
-                      --nodegroup-name "$NODEGROUP_NAME" \
-                      --region "$AWS_REGION" \
-                      --node-role "$NODE_ROLE_ARN" \
-                      --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
-                      --instance-types t3.medium \
-                      --scaling-config minSize=1,maxSize=2,desiredSize=2 \
-                      --ami-type AL2023_x86_64_STANDARD \
-                      --capacity-type ON_DEMAND
-                fi
+                            docker run --rm \
+                              -e AWS_ACCESS_KEY_ID \
+                              -e AWS_SECRET_ACCESS_KEY \
+                              -e AWS_SESSION_TOKEN \
+                              -e AWS_DEFAULT_REGION \
+                              public.ecr.aws/aws-cli/aws-cli:latest \
+                              eks create-nodegroup \
+                              --cluster-name "$EKS_CLUSTER" \
+                              --nodegroup-name "$NODEGROUP_NAME" \
+                              --region "$AWS_DEFAULT_REGION" \
+                              --node-role "$NODE_ROLE_ARN" \
+                              --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
+                              --instance-types t3.medium \
+                              --scaling-config minSize=1,maxSize=2,desiredSize=2 \
+                              --ami-type AL2023_x86_64_STANDARD \
+                              --capacity-type ON_DEMAND
+                        fi
 
-                echo "Waiting for node group to become ACTIVE..."
+                        echo "Waiting for node group to become ACTIVE..."
 
-                $AWS_CLI eks wait nodegroup-active \
-                  --cluster-name "$CLUSTER_NAME" \
-                  --nodegroup-name "$NODEGROUP_NAME" \
-                  --region "$AWS_REGION"
+                        docker run --rm \
+                          -e AWS_ACCESS_KEY_ID \
+                          -e AWS_SECRET_ACCESS_KEY \
+                          -e AWS_SESSION_TOKEN \
+                          -e AWS_DEFAULT_REGION \
+                          public.ecr.aws/aws-cli/aws-cli:latest \
+                          eks wait nodegroup-active \
+                          --cluster-name "$EKS_CLUSTER" \
+                          --nodegroup-name "$NODEGROUP_NAME" \
+                          --region "$AWS_DEFAULT_REGION"
 
-                echo "EKS node group is ACTIVE."
-            '''
+                        echo "EKS node group is ACTIVE."
+                    '''
+                }
+            }
         }
-    }
-}
-
 
         stage('Deploy to EKS') {
             steps {
@@ -381,8 +382,6 @@ stage('Create EKS Node Group') {
                           --name "$EKS_CLUSTER" \
                           --kubeconfig "$WORKSPACE/.kube/config"
 
-                        chmod 644 "$WORKSPACE/.kube/config"
-
                         # Generate temporary EKS authentication token
                         EKS_TOKEN=$(docker run --rm \
                           -e AWS_ACCESS_KEY_ID \
@@ -404,7 +403,6 @@ stage('Create EKS Node Group') {
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           apply -f k8s/postgres.yaml
@@ -414,7 +412,6 @@ stage('Create EKS Node Group') {
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           rollout status deployment/postgres \
@@ -426,17 +423,15 @@ stage('Create EKS Node Group') {
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           apply -f k8s/app.yaml
 
-                        # Update deployment to use Docker Hub image
+                        # Update application image
                         docker run --rm \
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           set image deployment/securebank-app \
@@ -448,7 +443,6 @@ stage('Create EKS Node Group') {
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           rollout status deployment/securebank-app \
@@ -460,7 +454,6 @@ stage('Create EKS Node Group') {
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           get pods -n "$K8S_NAMESPACE"
@@ -470,7 +463,6 @@ stage('Create EKS Node Group') {
                           --volumes-from jenkins \
                           -w "$WORKSPACE" \
                           -e KUBECONFIG \
-                          -e EKS_TOKEN \
                           bitnami/kubectl:latest \
                           --token "$EKS_TOKEN" \
                           get service securebank-app \

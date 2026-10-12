@@ -264,6 +264,32 @@ fi
     }
 }
 
+        
+stage('Wait for EKS Cluster') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws_creds'
+        ]]) {
+            sh '''
+                set +x
+
+                docker run --rm \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION="ap-south-1" \
+                  public.ecr.aws/aws-cli/aws-cli:latest \
+                  eks wait cluster-active \
+                  --name securebank-eks \
+                  --region ap-south-1
+
+                echo "EKS cluster is ACTIVE."
+            '''
+        }
+    }
+}
+
 
         stage('Deploy to EKS') {
             steps {

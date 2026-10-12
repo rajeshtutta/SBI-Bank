@@ -257,8 +257,8 @@ stage('Create EKS Cluster') {
                         --region "$AWS_REGION" \
                         --role-arn "$CLUSTER_ROLE_ARN" \
                         --resources-vpc-config \
-                        subnetIds=sub-REAL_SUBNET_ID_1,sub-REAL_SUBNET_ID_2
-                fi
+                        subnetIds=subnet-08c52e76b8d01fec1,subnet-01d3ce46e0e95325c
+fi
             '''
         }
     }

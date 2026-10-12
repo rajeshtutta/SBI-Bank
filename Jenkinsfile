@@ -215,6 +215,53 @@ stage('Install Dependencies') {
             }
         }
 
+        
+stage('Create EKS Cluster') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws_creds'
+        ]]) {
+            sh '''
+                set +x
+
+                CLUSTER_NAME="securebank-eks"
+                AWS_REGION="ap-south-1"
+
+                if docker run --rm \
+                    -e AWS_ACCESS_KEY_ID \
+                    -e AWS_SECRET_ACCESS_KEY \
+                    -e AWS_SESSION_TOKEN \
+                    public.ecr.aws/aws-cli/aws-cli:latest \
+                    eks describe-cluster \
+                    --name "$CLUSTER_NAME" \
+                    --region "$AWS_REGION" \
+                    >/dev/null 2>&1; then
+
+                    echo "EKS cluster already exists."
+
+                else
+                    echo "Creating EKS cluster..."
+
+                    docker run --rm \
+                        -e AWS_ACCESS_KEY_ID \
+                        -e AWS_SECRET_ACCESS_KEY \
+                        -e AWS_SESSION_TOKEN \
+                        -e AWS_DEFAULT_REGION="$AWS_REGION" \
+                        public.ecr.aws/aws-cli/aws-cli:latest \
+                        eks create-cluster \
+                        --name "$CLUSTER_NAME" \
+                        --region "$AWS_REGION" \
+                        --role-arn "REPLACE_WITH_EKS_CLUSTER_ROLE_ARN" \
+                        --resources-vpc-config \
+                        subnetIds=subnet-REPLACE1,subnet-REPLACE2
+                fi
+            '''
+        }
+    }
+}
+
+
         stage('Deploy to EKS') {
             steps {
                 withCredentials([

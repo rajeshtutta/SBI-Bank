@@ -44,17 +44,27 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh '''
-                    docker run --rm --user 1000:1000 \
-                      --volumes-from jenkins \
-                      -w "$WORKSPACE" \
-                      node:20-alpine npm ci
-                '''
-            }
-        }
+stage('Install Dependencies') {
+    steps {
+        sh '''
+            # Remove old dependencies and reinstall cleanly
+            docker run --rm \
+              --user root \
+              --volumes-from jenkins \
+              -w "$WORKSPACE" \
+              node:20-alpine \
+              sh -c 'rm -rf node_modules && npm ci'
 
+            # Restore workspace ownership for Jenkins user
+            docker run --rm \
+              --user root \
+              --volumes-from jenkins \
+              -w "$WORKSPACE" \
+              node:20-alpine \
+              chown -R 1000:1000 node_modules
+        '''
+    }
+}
         stage('SCA - npm Audit') {
             steps {
                 sh '''

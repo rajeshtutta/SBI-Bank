@@ -325,7 +325,7 @@ pipeline {
                               --region "$AWS_DEFAULT_REGION" \
                               --node-role "$NODE_ROLE_ARN" \
                               --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
-                              --instance-types t3.medium \
+                              --instance-types t3.small \
                               --scaling-config minSize=1,maxSize=2,desiredSize=2 \
                               --ami-type AL2023_x86_64_STANDARD \
                               --capacity-type ON_DEMAND

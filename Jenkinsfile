@@ -362,59 +362,67 @@ stage('Diagnose Failed Node Group') {
                     credentialsId: 'aws_creds'
                 ]]) {
                     sh '''
+                        set -eu
                         set +x
 
                         NODEGROUP_NAME="securebank-nodes"
+                        NODE_INSTANCE_TYPE="t3.small"
 
-                        if docker run --rm \
-                            -e AWS_ACCESS_KEY_ID \
-                            -e AWS_SECRET_ACCESS_KEY \
-                            -e AWS_SESSION_TOKEN \
-                            -e AWS_DEFAULT_REGION \
-                            public.ecr.aws/aws-cli/aws-cli:latest \
-                            eks describe-nodegroup \
-                            --cluster-name "$EKS_CLUSTER" \
-                            --nodegroup-name "$NODEGROUP_NAME" \
-                            --region "$AWS_DEFAULT_REGION" \
-                            >/dev/null 2>&1; then
-
-                            echo "Node group already exists."
-
-                        else
-                            echo "Creating EKS node group..."
-
+                        awscli() {
                             docker run --rm \
                               -e AWS_ACCESS_KEY_ID \
                               -e AWS_SECRET_ACCESS_KEY \
                               -e AWS_SESSION_TOKEN \
-                              -e AWS_DEFAULT_REGION \
-                              public.ecr.aws/aws-cli/aws-cli:latest \
-                              eks create-nodegroup \
-                              --cluster-name "$EKS_CLUSTER" \
-                              --nodegroup-name "$NODEGROUP_NAME" \
-                              --region "$AWS_DEFAULT_REGION" \
-                              --node-role "$NODE_ROLE_ARN" \
-                              --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
-                              --instance-types t3.small \
-                              --scaling-config minSize=1,maxSize=2,desiredSize=2 \
-                              --ami-type AL2023_x86_64_STANDARD \
-                              --capacity-type ON_DEMAND
+                              -e AWS_DEFAULT_REGION=ap-south-1 \
+                              public.ecr.aws/aws-cli/aws-cli:latest "$@"
+                        }
+
+                        # Check whether the node group exists. Only treat a genuine
+                        # ResourceNotFoundException as a missing node group.
+                        if awscli eks describe-nodegroup \
+                            --cluster-name "$EKS_CLUSTER" \
+                            --nodegroup-name "$NODEGROUP_NAME" \
+                            --region ap-south-1 \
+                            --query 'nodegroup.status' \
+                            --output text >/tmp/nodegroup-status.txt 2>/tmp/nodegroup-error.txt; then
+
+                            STATUS=$(cat /tmp/nodegroup-status.txt)
+
+                            if [ "$STATUS" = "ACTIVE" ]; then
+                                echo "Node group is already ACTIVE."
+                            else
+                                echo "Existing node group status: $STATUS"
+                                echo "Resolve or delete this existing node group before creating a replacement."
+                                cat /tmp/nodegroup-error.txt || true
+                                exit 1
+                            fi
+                        else
+                            if grep -q 'ResourceNotFoundException' /tmp/nodegroup-error.txt; then
+                                echo "Creating EKS node group using ${NODE_INSTANCE_TYPE}..."
+
+                                awscli eks create-nodegroup \
+                                  --cluster-name "$EKS_CLUSTER" \
+                                  --nodegroup-name "$NODEGROUP_NAME" \
+                                  --region ap-south-1 \
+                                  --node-role "$NODE_ROLE_ARN" \
+                                  --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
+                                  --instance-types "$NODE_INSTANCE_TYPE" \
+                                  --scaling-config minSize=1,maxSize=1,desiredSize=1 \
+                                  --ami-type AL2023_x86_64_STANDARD \
+                                  --capacity-type ON_DEMAND
+
+                                awscli eks wait nodegroup-active \
+                                  --cluster-name "$EKS_CLUSTER" \
+                                  --nodegroup-name "$NODEGROUP_NAME" \
+                                  --region ap-south-1
+
+                                echo "EKS node group is ACTIVE with ${NODE_INSTANCE_TYPE}."
+                            else
+                                echo "Unable to describe node group. This may be an AWS permissions, credentials, region, or connectivity error—not necessarily a missing node group."
+                                cat /tmp/nodegroup-error.txt
+                                exit 1
+                            fi
                         fi
-
-                        echo "Waiting for node group to become ACTIVE..."
-
-                        docker run --rm \
-                          -e AWS_ACCESS_KEY_ID \
-                          -e AWS_SECRET_ACCESS_KEY \
-                          -e AWS_SESSION_TOKEN \
-                          -e AWS_DEFAULT_REGION \
-                          public.ecr.aws/aws-cli/aws-cli:latest \
-                          eks wait nodegroup-active \
-                          --cluster-name "$EKS_CLUSTER" \
-                          --nodegroup-name "$NODEGROUP_NAME" \
-                          --region "$AWS_DEFAULT_REGION"
-
-                        echo "EKS node group is ACTIVE."
                     '''
                 }
             }

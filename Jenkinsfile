@@ -247,152 +247,130 @@ pipeline {
         }
 
         
-        stage('Deploy to EKS') {
-            steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws_creds'],
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -eu
-                        set +x
+        
+stage('Deploy to EKS') {
+    steps {
+        withCredentials([
+            [$class: 'AmazonWebServicesCredentialsBinding',
+             credentialsId: 'aws_creds'],
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKERHUB_USER',
+                passwordVariable: 'DOCKERHUB_TOKEN'
+            )
+        ]) {
+            sh '''
+                set -eu
+                set +x
 
-                        mkdir -p "$WORKSPACE/.kube"
+                mkdir -p "$WORKSPACE/.kube"
 
-                        # Get the EKS API endpoint
-                        EKS_ENDPOINT=$(docker run --rm \
-                          -e AWS_ACCESS_KEY_ID \
-                          -e AWS_SECRET_ACCESS_KEY \
-                          -e AWS_SESSION_TOKEN \
-                          -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                          public.ecr.aws/aws-cli/aws-cli:latest \
-                          eks describe-cluster \
-                          --name "$EKS_CLUSTER" \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --query 'cluster.endpoint' \
-                          --output text)
+                echo "Getting EKS API endpoint..."
+                EKS_ENDPOINT=$(docker run --rm \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+                  public.ecr.aws/aws-cli/aws-cli:latest \
+                  eks describe-cluster \
+                  --name "$EKS_CLUSTER" \
+                  --region "$AWS_DEFAULT_REGION" \
+                  --query 'cluster.endpoint' \
+                  --output text)
 
-                        # Get the EKS certificate authority
-                        CA_DATA=$(docker run --rm \
-                          -e AWS_ACCESS_KEY_ID \
-                          -e AWS_SECRET_ACCESS_KEY \
-                          -e AWS_SESSION_TOKEN \
-                          -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                          public.ecr.aws/aws-cli/aws-cli:latest \
-                          eks describe-cluster \
-                          --name "$EKS_CLUSTER" \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --query 'cluster.certificateAuthority.data' \
-                          --output text)
+                echo "Getting EKS certificate authority..."
+                CA_DATA=$(docker run --rm \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+                  public.ecr.aws/aws-cli/aws-cli:latest \
+                  eks describe-cluster \
+                  --name "$EKS_CLUSTER" \
+                  --region "$AWS_DEFAULT_REGION" \
+                  --query 'cluster.certificateAuthority.data' \
+                  --output text)
 
-                        printf '%s' "$CA_DATA" | base64 -d \
-                          > "$WORKSPACE/.kube/ca.crt"
+                printf '%s' "$CA_DATA" | base64 -d \
+                  > "$WORKSPACE/.kube/ca.crt"
 
-                        # Get an authentication token for EKS
-                        EKS_TOKEN=$(docker run --rm \
-                          -e AWS_ACCESS_KEY_ID \
-                          -e AWS_SECRET_ACCESS_KEY \
-                          -e AWS_SESSION_TOKEN \
-                          -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                          public.ecr.aws/aws-cli/aws-cli:latest \
-                          eks get-token \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --cluster-name "$EKS_CLUSTER" \
-                          --query 'status.token' \
-                          --output text)
+                echo "Getting EKS authentication token..."
+                EKS_TOKEN=$(docker run --rm \
+                  -e AWS_ACCESS_KEY_ID \
+                  -e AWS_SECRET_ACCESS_KEY \
+                  -e AWS_SESSION_TOKEN \
+                  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+                  public.ecr.aws/aws-cli/aws-cli:latest \
+                  eks get-token \
+                  --region "$AWS_DEFAULT_REGION" \
+                  --cluster-name "$EKS_CLUSTER" \
+                  --query 'status.token' \
+                  --output text)
 
-                        echo "Checking EKS connectivity..."
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          get nodes
-
-                        echo "Applying PostgreSQL manifests..."
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          apply -f k8s/postgres.yaml
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          rollout status deployment/postgres \
-                          -n "$K8S_NAMESPACE" --timeout=180s
-
-                        echo "Deploying SBI Bank application..."
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          apply -f k8s/app.yaml
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          set image deployment/securebank-app \
-                          securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
-                          -n "$K8S_NAMESPACE"
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          rollout status deployment/securebank-app \
-                          -n "$K8S_NAMESPACE" --timeout=300s
-
-                        echo "Checking deployed resources..."
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          get pods -n "$K8S_NAMESPACE"
-
-                        docker run --rm --user 0:0 \
-                          --volumes-from jenkins \
-                          -w "$WORKSPACE" \
-                          bitnami/kubectl:latest \
-                          --server="$EKS_ENDPOINT" \
-                          --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                          --token="$EKS_TOKEN" \
-                          get service securebank-app -n "$K8S_NAMESPACE"
-                    '''
+                # Reusable kubectl helper
+                kubectl() {
+                    docker run --rm --user 0:0 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" \
+                      bitnami/kubectl:latest \
+                      --server="$EKS_ENDPOINT" \
+                      --certificate-authority="$WORKSPACE/.kube/ca.crt" \
+                      --token="$EKS_TOKEN" "$@"
                 }
-            }
+
+                echo "Checking EKS connectivity..."
+                kubectl get nodes
+
+                echo "Creating namespace if it does not exist..."
+                kubectl create namespace "$K8S_NAMESPACE" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+
+                echo "Applying PostgreSQL manifests..."
+                kubectl apply -f k8s/postgres.yaml
+
+                echo "Checking PostgreSQL resources..."
+                kubectl get pods -n "$K8S_NAMESPACE" -o wide
+                kubectl get pvc -n "$K8S_NAMESPACE"
+                kubectl describe pvc postgres-pvc \
+                  -n "$K8S_NAMESPACE"
+
+                echo "Checking PostgreSQL logs..."
+                kubectl logs deployment/postgres \
+                  -n "$K8S_NAMESPACE" \
+                  --all-containers=true || true
+
+                echo "Waiting for PostgreSQL deployment..."
+                kubectl rollout status deployment/postgres \
+                  -n "$K8S_NAMESPACE" --timeout=300s
+
+                echo "PostgreSQL rollout completed."
+
+                echo "Applying SBI Bank application manifests..."
+                kubectl apply -f k8s/app.yaml
+
+                echo "Updating application image..."
+                kubectl set image deployment/securebank-app \
+                  securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
+                  -n "$K8S_NAMESPACE"
+
+                echo "Waiting for application rollout..."
+                kubectl rollout status deployment/securebank-app \
+                  -n "$K8S_NAMESPACE" --timeout=300s
+
+                echo "Checking deployed resources..."
+                kubectl get pods -n "$K8S_NAMESPACE" -o wide
+                kubectl get pvc -n "$K8S_NAMESPACE"
+                kubectl get services -n "$K8S_NAMESPACE"
+
+                echo "Checking application service..."
+                kubectl get service securebank-app \
+                  -n "$K8S_NAMESPACE"
+
+                echo "Deployment stage completed successfully."
+            '''
         }
+    }
+}
 
     } // closes stages
 

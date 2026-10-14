@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -20,14 +21,16 @@ pipeline {
     stages {
         stage('Checkout GitHub') {
             steps {
-                git branch: 'main', url: 'https://github.com/rajeshtutta/SBI-Bank.git'
+                git branch: 'main',
+                    url: 'https://github.com/rajeshtutta/SBI-Bank.git'
             }
         }
 
         stage('Gitleaks Secret Scan') {
             steps {
                 sh '''
-                    docker run --rm --volumes-from jenkins -w "$WORKSPACE" \
+                    docker run --rm --volumes-from jenkins \
+                      -w "$WORKSPACE" \
                       zricethezav/gitleaks:latest \
                       detect --source . --no-git --redact --exit-code 1
                 '''
@@ -49,6 +52,7 @@ pipeline {
                     docker run --rm --user root --volumes-from jenkins \
                       -w "$WORKSPACE" node:20-alpine \
                       sh -c 'rm -rf node_modules && npm ci'
+
                     docker run --rm --user root --volumes-from jenkins \
                       -w "$WORKSPACE" node:20-alpine \
                       chown -R 1000:1000 node_modules
@@ -59,21 +63,31 @@ pipeline {
         stage('SCA - npm Audit') {
             steps {
                 sh '''
-                    docker run --rm --user 1000:1000 --volumes-from jenkins \
-                      -w "$WORKSPACE" node:20-alpine npm audit --audit-level=high
+                    docker run --rm --user 1000:1000 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" node:20-alpine \
+                      npm audit --audit-level=high
                 '''
             }
         }
 
         stage('OWASP Dependency Check') {
             steps {
-                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                withCredentials([
+                    string(
+                        credentialsId: 'nvd-api-key',
+                        variable: 'NVD_API_KEY'
+                    )
+                ]) {
                     sh '''
                         set +x
                         mkdir -p dependency-check-report
-                        docker run --rm --user root --volumes-from jenkins \
+
+                        docker run --rm --user root \
+                          --volumes-from jenkins \
                           -v dependency-check-data:/usr/share/dependency-check/data \
-                          -w "$WORKSPACE" owasp/dependency-check:latest \
+                          -w "$WORKSPACE" \
+                          owasp/dependency-check:latest \
                           --project SBI-Bank \
                           --scan package.json \
                           --scan package-lock.json \
@@ -85,7 +99,11 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'dependency-check-report/**', allowEmptyArchive: true, fingerprint: true
+                    archiveArtifacts(
+                        artifacts: 'dependency-check-report/**',
+                        allowEmptyArchive: true,
+                        fingerprint: true
+                    )
                 }
             }
         }
@@ -93,10 +111,17 @@ pipeline {
         stage('SAST - SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonarqube-token',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
                         sh '''
                             set -eu
-                            docker run --rm --user 0:0 --volumes-from jenkins \
+
+                            docker run --rm --user 0:0 \
+                              --volumes-from jenkins \
                               -w "$WORKSPACE" \
                               -e SONAR_HOST_URL="$SONAR_HOST_URL" \
                               -e SONAR_TOKEN="$SONAR_TOKEN" \
@@ -115,8 +140,10 @@ pipeline {
         stage('Run Unit Tests') {
             steps {
                 sh '''
-                    docker run --rm --user 1000:1000 --volumes-from jenkins \
-                      -w "$WORKSPACE" node:20-alpine npm test
+                    docker run --rm --user 1000:1000 \
+                      --volumes-from jenkins \
+                      -w "$WORKSPACE" node:20-alpine \
+                      npm test
                 '''
             }
         }
@@ -124,7 +151,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .
+                    docker build \
+                      -t "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                      -t "${IMAGE_NAME}:latest" .
                 '''
             }
         }
@@ -136,23 +165,43 @@ pipeline {
                       -v /var/run/docker.sock:/var/run/docker.sock \
                       -v trivy-cache:/root/.cache/ \
                       aquasec/trivy:latest image \
-                      --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format table \
-                      ${IMAGE_NAME}:${BUILD_NUMBER}
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 \
+                      --format table \
+                      "${IMAGE_NAME}:${BUILD_NUMBER}"
                 '''
             }
         }
 
         stage('Push Image to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
                     sh '''
                         set +x
+                        set -eu
+
                         IMAGE="$DOCKERHUB_USER/$IMAGE_NAME"
-                        printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USER" --password-stdin
-                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} "$IMAGE:${BUILD_NUMBER}"
-                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} "$IMAGE:latest"
+
+                        printf '%s' "$DOCKERHUB_TOKEN" |
+                          docker login \
+                            --username "$DOCKERHUB_USER" \
+                            --password-stdin
+
+                        docker tag "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                          "$IMAGE:${BUILD_NUMBER}"
+                        docker tag "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                          "$IMAGE:latest"
+
                         docker push "$IMAGE:${BUILD_NUMBER}"
                         docker push "$IMAGE:latest"
+
                         docker logout
                     '''
                 }
@@ -161,24 +210,37 @@ pipeline {
 
         stage('Create EKS Cluster If Missing') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws_creds']]) {
+                withCredentials([
+                    [
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws_creds'
+                    ]
+                ]) {
                     sh '''
+                        set -eu
                         set +x
+
                         awscli() {
                           docker run --rm \
-                            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+                            -e AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY \
+                            -e AWS_SESSION_TOKEN \
                             -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
                             public.ecr.aws/aws-cli/aws-cli:latest "$@"
                         }
-                        if awscli eks describe-cluster --name "$EKS_CLUSTER" --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
-                          echo "EKS cluster already exists."
+
+                        if awscli eks describe-cluster \
+                          --name "$EKS_CLUSTER" \
+                          --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                            echo "EKS cluster already exists."
                         else
-                          echo "Creating EKS cluster..."
-                          awscli eks create-cluster \
-                            --name "$EKS_CLUSTER" \
-                            --region "$AWS_DEFAULT_REGION" \
-                            --role-arn arn:aws:iam::379367335704:role/securebank-eks-cluster-role \
-                            --resources-vpc-config subnetIds=${PUBLIC_SUBNET_1},${PUBLIC_SUBNET_2},endpointPublicAccess=true,endpointPrivateAccess=false
+                            echo "Creating EKS cluster..."
+
+                            awscli eks create-cluster \
+                              --name "$EKS_CLUSTER" \
+                              --region "$AWS_DEFAULT_REGION" \
+                              --role-arn arn:aws:iam::379367335704:role/securebank-eks-cluster-role \
+                              --resources-vpc-config "subnetIds=${PUBLIC_SUBNET_1},${PUBLIC_SUBNET_2},endpointPublicAccess=true,endpointPrivateAccess=false"
                         fi
                     '''
                 }
@@ -187,14 +249,24 @@ pipeline {
 
         stage('Wait for EKS Cluster Active') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws_creds']]) {
+                withCredentials([
+                    [
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws_creds'
+                    ]
+                ]) {
                     sh '''
                         set +x
+
                         docker run --rm \
-                          -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+                          -e AWS_ACCESS_KEY_ID \
+                          -e AWS_SECRET_ACCESS_KEY \
+                          -e AWS_SESSION_TOKEN \
                           -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
                           public.ecr.aws/aws-cli/aws-cli:latest \
-                          eks wait cluster-active --name "$EKS_CLUSTER" --region "$AWS_DEFAULT_REGION"
+                          eks wait cluster-active \
+                          --name "$EKS_CLUSTER" \
+                          --region "$AWS_DEFAULT_REGION"
                     '''
                 }
             }
@@ -202,201 +274,254 @@ pipeline {
 
         stage('Create EKS Node Group If Missing') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws_creds']]) {
+                withCredentials([
+                    [
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws_creds'
+                    ]
+                ]) {
                     sh '''
                         set -eu
                         set +x
+
                         awscli() {
                           docker run --rm \
-                            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+                            -e AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY \
+                            -e AWS_SESSION_TOKEN \
                             -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
                             public.ecr.aws/aws-cli/aws-cli:latest "$@"
                         }
-                        if awscli eks describe-nodegroup --cluster-name "$EKS_CLUSTER" --nodegroup-name securebank-nodes --region "$AWS_DEFAULT_REGION" --query 'nodegroup.status' --output text >/tmp/ng-status.txt 2>/tmp/ng-error.txt; then
-                          STATUS=$(cat /tmp/ng-status.txt)
-                          if [ "$STATUS" = "ACTIVE" ]; then
-                            echo "Node group is already ACTIVE."
-                          else
-                            echo "Node group exists with status: $STATUS. Not attempting duplicate creation."
-                            cat /tmp/ng-error.txt || true
-                            exit 1
-                          fi
+
+                        if awscli eks describe-nodegroup \
+                          --cluster-name "$EKS_CLUSTER" \
+                          --nodegroup-name securebank-nodes \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --query 'nodegroup.status' \
+                          --output text >/tmp/ng-status.txt 2>/tmp/ng-error.txt; then
+
+                            STATUS=$(cat /tmp/ng-status.txt)
+
+                            if [ "$STATUS" = "ACTIVE" ]; then
+                                echo "Node group is already ACTIVE."
+                            else
+                                echo "Node group status: $STATUS"
+                                cat /tmp/ng-error.txt || true
+                                exit 1
+                            fi
                         else
-                          if grep -q 'ResourceNotFoundException' /tmp/ng-error.txt; then
-                            echo "Creating node group in the public subnets..."
-                            awscli eks create-nodegroup \
-                              --cluster-name "$EKS_CLUSTER" \
-                              --nodegroup-name securebank-nodes \
-                              --region "$AWS_DEFAULT_REGION" \
-                              --node-role "$NODE_ROLE_ARN" \
-                              --subnets "$PUBLIC_SUBNET_1" "$PUBLIC_SUBNET_2" \
-                              --instance-types t3.small \
-                              --scaling-config minSize=1,maxSize=1,desiredSize=1 \
-                              --ami-type AL2023_x86_64_STANDARD \
-                              --capacity-type ON_DEMAND
-                            awscli eks wait nodegroup-active --cluster-name "$EKS_CLUSTER" --nodegroup-name securebank-nodes --region "$AWS_DEFAULT_REGION"
-                            echo "Node group is ACTIVE."
-                          else
-                            cat /tmp/ng-error.txt
-                            exit 1
-                          fi
+                            if grep -q 'ResourceNotFoundException' /tmp/ng-error.txt; then
+                                echo "Creating node group..."
+
+                                awscli eks create-nodegroup \
+                                  --cluster-name "$EKS_CLUSTER" \
+                                  --nodegroup-name securebank-nodes \
+                                  --region "$AWS_DEFAULT_REGION" \
+                                  --node-role "$NODE_ROLE_ARN" \
+                                  --subnets "$PUBLIC_SUBNET_1" "$PUBLIC_SUBNET_2" \
+                                  --instance-types t3.small \
+                                  --scaling-config minSize=1,maxSize=1,desiredSize=1 \
+                                  --ami-type AL2023_x86_64_STANDARD \
+                                  --capacity-type ON_DEMAND
+
+                                awscli eks wait nodegroup-active \
+                                  --cluster-name "$EKS_CLUSTER" \
+                                  --nodegroup-name securebank-nodes \
+                                  --region "$AWS_DEFAULT_REGION"
+
+                                echo "Node group is ACTIVE."
+                            else
+                                cat /tmp/ng-error.txt
+                                exit 1
+                            fi
                         fi
                     '''
                 }
             }
         }
 
-        
-        
-stage('Deploy to EKS') {
-    steps {
-        withCredentials([
-            [$class: 'AmazonWebServicesCredentialsBinding',
-             credentialsId: 'aws_creds'],
-            usernamePassword(
-                credentialsId: 'dockerhub-creds',
-                usernameVariable: 'DOCKERHUB_USER',
-                passwordVariable: 'DOCKERHUB_TOKEN'
-            )
-        ]) {
-            sh '''
-                set -eu
-                set +x
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([
+                    [
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws_creds'
+                    ],
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+                        set +x
 
-                mkdir -p "$WORKSPACE/.kube"
+                        mkdir -p "$WORKSPACE/.kube"
 
-                echo "Getting EKS API endpoint..."
-                EKS_ENDPOINT=$(docker run --rm \
-                  -e AWS_ACCESS_KEY_ID \
-                  -e AWS_SECRET_ACCESS_KEY \
-                  -e AWS_SESSION_TOKEN \
-                  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                  public.ecr.aws/aws-cli/aws-cli:latest \
-                  eks describe-cluster \
-                  --name "$EKS_CLUSTER" \
-                  --region "$AWS_DEFAULT_REGION" \
-                  --query 'cluster.endpoint' \
-                  --output text)
+                        awscli() {
+                          docker run --rm \
+                            -e AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY \
+                            -e AWS_SESSION_TOKEN \
+                            -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+                            public.ecr.aws/aws-cli/aws-cli:latest "$@"
+                        }
 
-                echo "Getting EKS certificate authority..."
-                CA_DATA=$(docker run --rm \
-                  -e AWS_ACCESS_KEY_ID \
-                  -e AWS_SECRET_ACCESS_KEY \
-                  -e AWS_SESSION_TOKEN \
-                  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                  public.ecr.aws/aws-cli/aws-cli:latest \
-                  eks describe-cluster \
-                  --name "$EKS_CLUSTER" \
-                  --region "$AWS_DEFAULT_REGION" \
-                  --query 'cluster.certificateAuthority.data' \
-                  --output text)
+                        echo "Checking EKS cluster status..."
+                        CLUSTER_STATUS=$(awscli eks describe-cluster \
+                          --name "$EKS_CLUSTER" \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --query 'cluster.status' \
+                          --output text)
 
-                printf '%s' "$CA_DATA" | base64 -d \
-                  > "$WORKSPACE/.kube/ca.crt"
+                        if [ "$CLUSTER_STATUS" != "ACTIVE" ]; then
+                            echo "EKS cluster is not ACTIVE: $CLUSTER_STATUS"
+                            exit 1
+                        fi
 
-                echo "Getting EKS authentication token..."
-                EKS_TOKEN=$(docker run --rm \
-                  -e AWS_ACCESS_KEY_ID \
-                  -e AWS_SECRET_ACCESS_KEY \
-                  -e AWS_SESSION_TOKEN \
-                  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                  public.ecr.aws/aws-cli/aws-cli:latest \
-                  eks get-token \
-                  --region "$AWS_DEFAULT_REGION" \
-                  --cluster-name "$EKS_CLUSTER" \
-                  --query 'status.token' \
-                  --output text)
+                        echo "Checking EBS CSI add-on..."
+                        ADDON_STATUS=$(awscli eks describe-addon \
+                          --cluster-name "$EKS_CLUSTER" \
+                          --addon-name aws-ebs-csi-driver \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --query 'addon.status' \
+                          --output text)
 
-                # Reusable kubectl helper
-                kubectl() {
-                    docker run --rm --user 0:0 \
-                      --volumes-from jenkins \
-                      -w "$WORKSPACE" \
-                      bitnami/kubectl:latest \
-                      --server="$EKS_ENDPOINT" \
-                      --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                      --token="$EKS_TOKEN" "$@"
+                        if [ "$ADDON_STATUS" != "ACTIVE" ]; then
+                            echo "EBS CSI add-on is not ACTIVE: $ADDON_STATUS"
+                            echo "Wait for the add-on to become ACTIVE and rerun."
+                            exit 1
+                        fi
+
+                        echo "Getting EKS endpoint..."
+                        EKS_ENDPOINT=$(awscli eks describe-cluster \
+                          --name "$EKS_CLUSTER" \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --query 'cluster.endpoint' \
+                          --output text)
+
+                        echo "Getting EKS certificate..."
+                        CA_DATA=$(awscli eks describe-cluster \
+                          --name "$EKS_CLUSTER" \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --query 'cluster.certificateAuthority.data' \
+                          --output text)
+
+                        printf '%s' "$CA_DATA" |
+                          base64 -d > "$WORKSPACE/.kube/ca.crt"
+
+                        echo "Getting EKS token..."
+                        EKS_TOKEN=$(awscli eks get-token \
+                          --region "$AWS_DEFAULT_REGION" \
+                          --cluster-name "$EKS_CLUSTER" \
+                          --query 'status.token' \
+                          --output text)
+
+                        kubectl() {
+                          docker run --rm --user 0:0 \
+                            --volumes-from jenkins \
+                            -w "$WORKSPACE" \
+                            bitnami/kubectl:latest \
+                            --server="$EKS_ENDPOINT" \
+                            --certificate-authority="$WORKSPACE/.kube/ca.crt" \
+                            --token="$EKS_TOKEN" "$@"
+                        }
+
+                        echo "Checking Kubernetes connectivity..."
+                        kubectl get nodes
+
+                        echo "Checking EBS CSI driver pods..."
+                        kubectl get pods -n kube-system | grep ebs-csi || true
+
+                        echo "Checking StorageClass manifest..."
+                        test -f k8s/storageclass.yaml
+                        kubectl apply -f k8s/storageclass.yaml
+
+                        echo "Verifying ebs-gp3 StorageClass..."
+                        kubectl get storageclass ebs-gp3
+
+                        echo "Creating namespace if required..."
+                        kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 ||
+                          kubectl create namespace "$K8S_NAMESPACE"
+
+                        echo "Checking existing PostgreSQL PVC..."
+                        if kubectl get pvc postgres-pvc \
+                          -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
+
+                            PVC_PHASE=$(kubectl get pvc postgres-pvc \
+                              -n "$K8S_NAMESPACE" \
+                              -o jsonpath='{.status.phase}')
+
+                            PVC_VOLUME=$(kubectl get pvc postgres-pvc \
+                              -n "$K8S_NAMESPACE" \
+                              -o jsonpath='{.spec.volumeName}')
+
+                            PVC_STORAGE_CLASS=$(kubectl get pvc postgres-pvc \
+                              -n "$K8S_NAMESPACE" \
+                              -o jsonpath='{.spec.storageClassName}')
+
+                            echo "PVC phase: $PVC_PHASE"
+                            echo "PVC storage class: $PVC_STORAGE_CLASS"
+                            echo "PVC volume: $PVC_VOLUME"
+
+                            if [ "$PVC_STORAGE_CLASS" != "ebs-gp3" ]; then
+                              if [ "$PVC_PHASE" = "Pending" ] &&
+                                 [ -z "$PVC_VOLUME" ]; then
+                                echo "Deleting only the unbound Pending PVC so it can be recreated with ebs-gp3."
+                                kubectl delete pvc postgres-pvc \
+                                  -n "$K8S_NAMESPACE"
+                              else
+                                echo "PVC uses a different StorageClass and is not a safe unbound Pending PVC."
+                                echo "Stopping to protect existing database storage."
+                                exit 1
+                              fi
+                            fi
+                        fi
+
+                        echo "Applying PostgreSQL manifests..."
+                        kubectl apply -f k8s/postgres.yaml
+
+                        echo "Checking PostgreSQL PVC..."
+                        kubectl get pvc postgres-pvc -n "$K8S_NAMESPACE"
+
+                        echo "Waiting for PostgreSQL deployment..."
+                        kubectl rollout status deployment/postgres \
+                          -n "$K8S_NAMESPACE" \
+                          --timeout=300s
+
+                        echo "PostgreSQL deployment is ready."
+
+                        echo "Checking PostgreSQL pod and logs..."
+                        kubectl get pods -n "$K8S_NAMESPACE" -o wide
+                        kubectl logs deployment/postgres \
+                          -n "$K8S_NAMESPACE" \
+                          --all-containers=true || true
+
+                        echo "Applying application manifests..."
+                        kubectl apply -f k8s/app.yaml
+
+                        echo "Updating application image..."
+                        kubectl set image deployment/securebank-app \
+                          securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
+                          -n "$K8S_NAMESPACE"
+
+                        echo "Waiting for application rollout..."
+                        kubectl rollout status deployment/securebank-app \
+                          -n "$K8S_NAMESPACE" \
+                          --timeout=300s
+
+                        echo "Checking deployed resources..."
+                        kubectl get pods -n "$K8S_NAMESPACE" -o wide
+                        kubectl get pvc -n "$K8S_NAMESPACE"
+                        kubectl get services -n "$K8S_NAMESPACE"
+
+                        echo "Deployment stage completed successfully."
+                    '''
                 }
-
-                echo "Checking installed EKS add-ons..."
-
-docker run --rm \
-  -e AWS_ACCESS_KEY_ID \
-  -e AWS_SECRET_ACCESS_KEY \
-  -e AWS_SESSION_TOKEN \
-  -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-  public.ecr.aws/aws-cli/aws-cli:latest \
-  eks list-addons \
-  --cluster-name "$EKS_CLUSTER" \
-  --region "$AWS_DEFAULT_REGION"
-
-                echo "Checking EKS connectivity..."
-                kubectl get nodes
-
-                echo "Creating namespace if it does not exist..."
-                kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 || \
-                kubectl create namespace "$K8S_NAMESPACE"
-
-                echo "Applying PostgreSQL manifests..."
-                
-kubectl apply -f k8s/postgres.yaml
-
-echo "Checking EBS CSI driver pods..."
-kubectl get pods -n kube-system | grep ebs-csi || true
-
-echo "Checking EBS CSI driver deployment..."
-kubectl get deployment ebs-csi-controller -n kube-system || true
-
-echo "Checking storage classes..."
-kubectl get storageclass
-
-echo "Checking PVC events..."
-kubectl describe pvc postgres-pvc -n "$K8S_NAMESPACE"
-
-echo "Checking PostgreSQL resources..."
-kubectl get pods -n "$K8S_NAMESPACE" -o wide
-kubectl get pvc -n "$K8S_NAMESPACE"
-
-echo "Checking PostgreSQL logs..."
-kubectl logs deployment/postgres \
-  -n "$K8S_NAMESPACE" \
-  --all-containers=true || true
-
-echo "Waiting for PostgreSQL deployment..."
-kubectl rollout status deployment/postgres \
-  -n "$K8S_NAMESPACE" --timeout=300s
-
-
-                echo "PostgreSQL rollout completed."
-
-                echo "Applying SBI Bank application manifests..."
-                kubectl apply -f k8s/app.yaml
-
-                echo "Updating application image..."
-                kubectl set image deployment/securebank-app \
-                  securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
-                  -n "$K8S_NAMESPACE"
-
-                echo "Waiting for application rollout..."
-                kubectl rollout status deployment/securebank-app \
-                  -n "$K8S_NAMESPACE" --timeout=300s
-
-                echo "Checking deployed resources..."
-                kubectl get pods -n "$K8S_NAMESPACE" -o wide
-                kubectl get pvc -n "$K8S_NAMESPACE"
-                kubectl get services -n "$K8S_NAMESPACE"
-
-                echo "Checking application service..."
-                kubectl get service securebank-app \
-                  -n "$K8S_NAMESPACE"
-
-                echo "Deployment stage completed successfully."
-            '''
+            }
         }
     }
-}
-
-    } // closes stages
 
     post {
         always {
@@ -406,9 +531,11 @@ kubectl rollout status deployment/postgres \
             '''
             echo 'SBI Bank DevSecOps pipeline execution finished.'
         }
+
         success {
             echo 'SBI Bank DevSecOps pipeline completed successfully.'
         }
+
         failure {
             echo 'Pipeline failed. Check Console Output.'
         }

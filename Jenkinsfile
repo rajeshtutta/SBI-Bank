@@ -316,33 +316,7 @@ stage('Diagnose EKS Node Group') {
 
 
 
-stage('Diagnose Failed Node Group') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws_creds'
-        ]]) {
-            sh '''
-                set +x
-
-                docker run --rm \
-                  -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-                  -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-                  -e AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
-                  -e AWS_DEFAULT_REGION=ap-south-1 \
-                  public.ecr.aws/aws-cli/aws-cli:latest \
-                  eks describe-nodegroup \
-                  --cluster-name securebank-eks \
-                  --nodegroup-name securebank-nodes \
-                  --region ap-south-1 \
-                  --query 'nodegroup.{Status:status,InstanceTypes:instanceTypes,Issues:health.issues}' \
-                  --output json
-            '''
-        }
-    }
-}
-
-        
+ 
         stage('Create EKS Node Group') {
             steps {
                 withCredentials([[

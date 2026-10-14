@@ -306,9 +306,6 @@ pipeline {
                           --query 'status.token' \
                           --output text)
 
-                        # Common kubectl connection options
-                        KUBECTL="--server=$EKS_ENDPOINT --certificate-authority=$WORKSPACE/.kube/ca.crt --token=$EKS_TOKEN"
-
                         echo "Checking EKS connectivity..."
 
                         docker run --rm --user 0:0 \
@@ -413,3 +410,4 @@ pipeline {
             echo 'Pipeline failed. Check Console Output.'
         }
     }
+}

@@ -326,15 +326,24 @@ stage('Deploy to EKS') {
                 kubectl create namespace "$K8S_NAMESPACE"
 
                 echo "Applying PostgreSQL manifests..."
-                kubectl apply -f k8s/postgres.yaml
-
-                echo "Applying PostgreSQL manifests..."
+                
 kubectl apply -f k8s/postgres.yaml
+
+echo "Checking EBS CSI driver pods..."
+kubectl get pods -n kube-system | grep ebs-csi || true
+
+echo "Checking EBS CSI driver deployment..."
+kubectl get deployment ebs-csi-controller -n kube-system || true
+
+echo "Checking storage classes..."
+kubectl get storageclass
+
+echo "Checking PVC events..."
+kubectl describe pvc postgres-pvc -n "$K8S_NAMESPACE"
 
 echo "Checking PostgreSQL resources..."
 kubectl get pods -n "$K8S_NAMESPACE" -o wide
 kubectl get pvc -n "$K8S_NAMESPACE"
-kubectl describe pvc postgres-pvc -n "$K8S_NAMESPACE"
 
 echo "Checking PostgreSQL logs..."
 kubectl logs deployment/postgres \
@@ -345,20 +354,6 @@ echo "Waiting for PostgreSQL deployment..."
 kubectl rollout status deployment/postgres \
   -n "$K8S_NAMESPACE" --timeout=300s
 
-                echo "Checking PostgreSQL resources..."
-                kubectl get pods -n "$K8S_NAMESPACE" -o wide
-                kubectl get pvc -n "$K8S_NAMESPACE"
-                kubectl describe pvc postgres-pvc \
-                  -n "$K8S_NAMESPACE"
-
-                echo "Checking PostgreSQL logs..."
-                kubectl logs deployment/postgres \
-                  -n "$K8S_NAMESPACE" \
-                  --all-containers=true || true
-
-                echo "Waiting for PostgreSQL deployment..."
-                kubectl rollout status deployment/postgres \
-                  -n "$K8S_NAMESPACE" --timeout=300s
 
                 echo "PostgreSQL rollout completed."
 

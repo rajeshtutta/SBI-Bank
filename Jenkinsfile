@@ -322,8 +322,8 @@ stage('Deploy to EKS') {
                 kubectl get nodes
 
                 echo "Creating namespace if it does not exist..."
-                kubectl create namespace "$K8S_NAMESPACE" \
-                  --dry-run=client -o yaml | kubectl apply -f -
+                kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 || \
+                kubectl create namespace "$K8S_NAMESPACE"
 
                 echo "Applying PostgreSQL manifests..."
                 kubectl apply -f k8s/postgres.yaml

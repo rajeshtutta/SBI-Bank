@@ -328,6 +328,23 @@ stage('Deploy to EKS') {
                 echo "Applying PostgreSQL manifests..."
                 kubectl apply -f k8s/postgres.yaml
 
+                echo "Applying PostgreSQL manifests..."
+kubectl apply -f k8s/postgres.yaml
+
+echo "Checking PostgreSQL resources..."
+kubectl get pods -n "$K8S_NAMESPACE" -o wide
+kubectl get pvc -n "$K8S_NAMESPACE"
+kubectl describe pvc postgres-pvc -n "$K8S_NAMESPACE"
+
+echo "Checking PostgreSQL logs..."
+kubectl logs deployment/postgres \
+  -n "$K8S_NAMESPACE" \
+  --all-containers=true || true
+
+echo "Waiting for PostgreSQL deployment..."
+kubectl rollout status deployment/postgres \
+  -n "$K8S_NAMESPACE" --timeout=300s
+
                 echo "Checking PostgreSQL resources..."
                 kubectl get pods -n "$K8S_NAMESPACE" -o wide
                 kubectl get pvc -n "$K8S_NAMESPACE"

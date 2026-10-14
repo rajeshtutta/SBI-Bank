@@ -367,7 +367,7 @@ stage('Diagnose EKS Node Group') {
                                   --nodegroup-name "$NODEGROUP_NAME" \
                                   --region ap-south-1 \
                                   --node-role "$NODE_ROLE_ARN" \
-                                  --subnets subnet-00e4fa9d7e2ab63fc subnet-023160aa2de72101e \
+                                  --subnets subnet-08c52e76b8d01fec1 subnet-01d3ce46e0e95325c \
                                   --instance-types "$NODE_INSTANCE_TYPE" \
                                   --scaling-config minSize=1,maxSize=1,desiredSize=1 \
                                   --ami-type AL2023_x86_64_STANDARD \

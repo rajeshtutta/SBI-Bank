@@ -394,6 +394,7 @@ pipeline {
             }
         }
 
+    } // closes stages
 
     post {
         always {
@@ -410,5 +411,4 @@ pipeline {
             echo 'Pipeline failed. Check Console Output.'
         }
     }
-}
 }

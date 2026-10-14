@@ -413,4 +413,3 @@ pipeline {
             echo 'Pipeline failed. Check Console Output.'
         }
     }
-}

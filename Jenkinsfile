@@ -229,34 +229,22 @@ stage('Diagnose EKS Node Group') {
                 set +x
 
                 docker run --rm \
-                  --volumes-from jenkins \
-                  -e AWS_ACCESS_KEY_ID \
-                  -e AWS_SECRET_ACCESS_KEY \
-                  -e AWS_SESSION_TOKEN \
-                  -e AWS_DEFAULT_REGION=ap-south-1 \
-                  public.ecr.aws/aws-cli/aws-cli:latest \
-                  sts get-caller-identity
-
-                docker run --rm \
-                  --volumes-from jenkins \
                   -e AWS_ACCESS_KEY_ID \
                   -e AWS_SECRET_ACCESS_KEY \
                   -e AWS_SESSION_TOKEN \
                   -e AWS_DEFAULT_REGION=ap-south-1 \
                   public.ecr.aws/aws-cli/aws-cli:latest \
                   eks describe-nodegroup \
-                  --cluster-name securebank-eks \
+                  --cluster-name "$EKS_CLUSTER" \
                   --nodegroup-name securebank-nodes \
                   --region ap-south-1 \
                   --query 'nodegroup.{Status:status,InstanceTypes:instanceTypes,Issues:health.issues}' \
-                  --output json
+                  --output json \
+                || echo "Node group not found yet; pipeline will continue."
             '''
         }
     }
-}
-
-
-        
+}  
         
         stage('Create EKS Cluster') {
             steps {

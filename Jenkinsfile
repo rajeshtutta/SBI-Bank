@@ -446,49 +446,45 @@ pipeline {
                           kubectl create namespace "$K8S_NAMESPACE"
 
                         echo "Checking existing PostgreSQL PVC..."
-                        if kubectl get pvc postgres-pvc \
-                          -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
+                        
+echo "Checking existing PostgreSQL PVC..."
 
-                            PVC_PHASE=$(kubectl get pvc postgres-pvc \
-                              -n "$K8S_NAMESPACE" \
-                              -o jsonpath='{.status.phase}')
+if kubectl get pvc postgres-pvc \
+  -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
 
-                            PVC_VOLUME=$(kubectl get pvc postgres-pvc \
-                              -n "$K8S_NAMESPACE" \
-                              -o jsonpath='{.spec.volumeName}')
+    PVC_PHASE=$(kubectl get pvc postgres-pvc \
+      -n "$K8S_NAMESPACE" \
+      -o jsonpath='{.status.phase}')
 
-                            PVC_STORAGE_CLASS=$(kubectl get pvc postgres-pvc \
-                              -n "$K8S_NAMESPACE" \
-                              -o jsonpath='{.spec.storageClassName}')
+    PVC_STORAGE_CLASS=$(kubectl get pvc postgres-pvc \
+      -n "$K8S_NAMESPACE" \
+      -o jsonpath='{.spec.storageClassName}')
 
-                            echo "PVC phase: $PVC_PHASE"
-                            echo "PVC storage class: $PVC_STORAGE_CLASS"
-                            echo "PVC volume: $PVC_VOLUME"
+    echo "PVC phase: $PVC_PHASE"
+    echo "PVC storage class: $PVC_STORAGE_CLASS"
 
-                            if [ "$PVC_STORAGE_CLASS" != "ebs-gp3" ]; then
-                              if [ "$PVC_PHASE" = "Pending" ] &&
-                                 [ -z "$PVC_VOLUME" ]; then
-                                echo "Deleting only the unbound Pending PVC so it can be recreated with ebs-gp3."
-                                kubectl delete pvc postgres-pvc \
-                                  -n "$K8S_NAMESPACE"
-                              else
-                                echo "PVC uses a different StorageClass and is not a safe unbound Pending PVC."
-                                echo "Stopping to protect existing database storage."
-                                exit 1
-                              fi
-                            fi
-                        fi
+    if [ "$PVC_PHASE" = "Bound" ]; then
+        echo "Existing PVC is Bound. Preserving database storage."
+    else
+        echo "PVC is not Bound. Checking its status and events."
+        kubectl describe pvc postgres-pvc -n "$K8S_NAMESPACE"
+        exit 1
+    fi
+else
+    echo "PVC does not exist. It will be created from postgres.yaml."
+fi
 
-                        echo "Applying PostgreSQL manifests..."
-                        kubectl apply -f k8s/postgres.yaml
+echo "Applying PostgreSQL manifests..."
+kubectl apply -f k8s/postgres.yaml
 
-                        echo "Checking PostgreSQL PVC..."
-                        kubectl get pvc postgres-pvc -n "$K8S_NAMESPACE"
+echo "Checking PostgreSQL PVC..."
+kubectl get pvc postgres-pvc -n "$K8S_NAMESPACE"
 
-                        echo "Waiting for PostgreSQL deployment..."
-                        kubectl rollout status deployment/postgres \
-                          -n "$K8S_NAMESPACE" \
-                          --timeout=300s
+echo "Waiting for PostgreSQL deployment..."
+kubectl rollout status deployment/postgres \
+  -n "$K8S_NAMESPACE" \
+  --timeout=300s
+
 
                         echo "PostgreSQL deployment is ready."
 

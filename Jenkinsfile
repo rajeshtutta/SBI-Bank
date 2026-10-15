@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -340,185 +339,181 @@ pipeline {
             }
         }
 
-        stage('Deploy to EKS') {
-            steps {
-                withCredentials([
-                    [
-                        $class: 'AmazonWebServicesCredentialsBinding',
-                        credentialsId: 'aws_creds'
-                    ],
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -eu
-                        set +x
+        
+stage('Deploy to EKS') {
+    steps {
+        withCredentials([
+            [
+                $class: 'AmazonWebServicesCredentialsBinding',
+                credentialsId: 'aws_creds'
+            ],
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKERHUB_USER',
+                passwordVariable: 'DOCKERHUB_TOKEN'
+            )
+        ]) {
+            sh '''
+                set -eu
+                set +x
 
-                        mkdir -p "$WORKSPACE/.kube"
+                mkdir -p "$WORKSPACE/.kube"
 
-                        awscli() {
-                          docker run --rm \
-                            -e AWS_ACCESS_KEY_ID \
-                            -e AWS_SECRET_ACCESS_KEY \
-                            -e AWS_SESSION_TOKEN \
-                            -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
-                            public.ecr.aws/aws-cli/aws-cli:latest "$@"
-                        }
-
-                        echo "Checking EKS cluster status..."
-                        CLUSTER_STATUS=$(awscli eks describe-cluster \
-                          --name "$EKS_CLUSTER" \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --query 'cluster.status' \
-                          --output text)
-
-                        if [ "$CLUSTER_STATUS" != "ACTIVE" ]; then
-                            echo "EKS cluster is not ACTIVE: $CLUSTER_STATUS"
-                            exit 1
-                        fi
-
-                        echo "Checking EBS CSI add-on..."
-                        ADDON_STATUS=$(awscli eks describe-addon \
-                          --cluster-name "$EKS_CLUSTER" \
-                          --addon-name aws-ebs-csi-driver \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --query 'addon.status' \
-                          --output text)
-
-                        if [ "$ADDON_STATUS" != "ACTIVE" ]; then
-                            echo "EBS CSI add-on is not ACTIVE: $ADDON_STATUS"
-                            echo "Wait for the add-on to become ACTIVE and rerun."
-                            exit 1
-                        fi
-
-                        echo "Getting EKS endpoint..."
-                        EKS_ENDPOINT=$(awscli eks describe-cluster \
-                          --name "$EKS_CLUSTER" \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --query 'cluster.endpoint' \
-                          --output text)
-
-                        echo "Getting EKS certificate..."
-                        CA_DATA=$(awscli eks describe-cluster \
-                          --name "$EKS_CLUSTER" \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --query 'cluster.certificateAuthority.data' \
-                          --output text)
-
-                        printf '%s' "$CA_DATA" |
-                          base64 -d > "$WORKSPACE/.kube/ca.crt"
-
-                        echo "Getting EKS token..."
-                        EKS_TOKEN=$(awscli eks get-token \
-                          --region "$AWS_DEFAULT_REGION" \
-                          --cluster-name "$EKS_CLUSTER" \
-                          --query 'status.token' \
-                          --output text)
-
-                        kubectl() {
-                          docker run --rm --user 0:0 \
-                            --volumes-from jenkins \
-                            -w "$WORKSPACE" \
-                            bitnami/kubectl:latest \
-                            --server="$EKS_ENDPOINT" \
-                            --certificate-authority="$WORKSPACE/.kube/ca.crt" \
-                            --token="$EKS_TOKEN" "$@"
-                        }
-
-                        echo "Checking Kubernetes connectivity..."
-                        kubectl get nodes
-
-                        echo "Checking EBS CSI driver pods..."
-                        kubectl get pods -n kube-system | grep ebs-csi || true
-
-                        echo "Checking StorageClass manifest..."
-                        test -f k8s/storageclass.yaml
-                        kubectl apply -f k8s/storageclass.yaml
-
-                        echo "Verifying ebs-gp3 StorageClass..."
-                        kubectl get storageclass ebs-gp3
-
-                        echo "Creating namespace if required..."
-                        kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 ||
-                          kubectl create namespace "$K8S_NAMESPACE"
-
-                        echo "Checking existing PostgreSQL PVC..."
-                        
-echo "Checking existing PostgreSQL PVC..."
-
-if kubectl get pvc postgres-pvc \
-  -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
-
-    PVC_PHASE=$(kubectl get pvc postgres-pvc \
-      -n "$K8S_NAMESPACE" \
-      -o jsonpath='{.status.phase}')
-
-    PVC_STORAGE_CLASS=$(kubectl get pvc postgres-pvc \
-      -n "$K8S_NAMESPACE" \
-      -o jsonpath='{.spec.storageClassName}')
-
-    echo "PVC phase: $PVC_PHASE"
-    echo "PVC storage class: $PVC_STORAGE_CLASS"
-
-    if [ "$PVC_PHASE" = "Bound" ]; then
-        echo "Existing PVC is Bound. Preserving database storage."
-    else
-        echo "PVC is not Bound. Checking its status and events."
-        kubectl describe pvc postgres-pvc -n "$K8S_NAMESPACE"
-        exit 1
-    fi
-else
-    echo "PVC does not exist. It will be created from postgres.yaml."
-fi
-
-echo "Applying PostgreSQL manifests..."
-kubectl apply -f k8s/postgres.yaml
-
-echo "Checking PostgreSQL PVC..."
-kubectl get pvc postgres-pvc -n "$K8S_NAMESPACE"
-
-echo "Waiting for PostgreSQL deployment..."
-kubectl rollout status deployment/postgres \
-  -n "$K8S_NAMESPACE" \
-  --timeout=300s
-
-
-                        echo "PostgreSQL deployment is ready."
-
-                        echo "Checking PostgreSQL pod and logs..."
-                        kubectl get pods -n "$K8S_NAMESPACE" -o wide
-                        kubectl logs deployment/postgres \
-                          -n "$K8S_NAMESPACE" \
-                          --all-containers=true || true
-
-                        echo "Applying application manifests..."
-                        kubectl apply -f k8s/app.yaml
-
-                        echo "Updating application image..."
-                        kubectl set image deployment/securebank-app \
-                          securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
-                          -n "$K8S_NAMESPACE"
-
-                        echo "Waiting for application rollout..."
-                        kubectl rollout status deployment/securebank-app \
-                          -n "$K8S_NAMESPACE" \
-                          --timeout=300s
-
-                        echo "Checking deployed resources..."
-                        kubectl get pods -n "$K8S_NAMESPACE" -o wide
-                        kubectl get pvc -n "$K8S_NAMESPACE"
-                        kubectl get services -n "$K8S_NAMESPACE"
-
-                        echo "Deployment stage completed successfully."
-                    '''
+                awscli() {
+                    docker run --rm \
+                      -e AWS_ACCESS_KEY_ID \
+                      -e AWS_SECRET_ACCESS_KEY \
+                      -e AWS_SESSION_TOKEN \
+                      -e AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+                      public.ecr.aws/aws-cli/aws-cli:latest "$@"
                 }
-            }
+
+                echo "Checking EKS cluster status..."
+                CLUSTER_STATUS=$(awscli eks describe-cluster \
+                    --name "$EKS_CLUSTER" \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --query 'cluster.status' \
+                    --output text)
+
+                if [ "$CLUSTER_STATUS" != "ACTIVE" ]; then
+                    echo "EKS cluster is not ACTIVE: $CLUSTER_STATUS"
+                    exit 1
+                fi
+
+                echo "Checking EBS CSI add-on..."
+                ADDON_STATUS=$(awscli eks describe-addon \
+                    --cluster-name "$EKS_CLUSTER" \
+                    --addon-name aws-ebs-csi-driver \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --query 'addon.status' \
+                    --output text)
+
+                if [ "$ADDON_STATUS" != "ACTIVE" ]; then
+                    echo "EBS CSI add-on is not ACTIVE: $ADDON_STATUS"
+                    exit 1
+                fi
+
+                echo "Getting EKS endpoint..."
+                EKS_ENDPOINT=$(awscli eks describe-cluster \
+                    --name "$EKS_CLUSTER" \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --query 'cluster.endpoint' \
+                    --output text)
+
+                echo "Getting EKS certificate..."
+                CA_DATA=$(awscli eks describe-cluster \
+                    --name "$EKS_CLUSTER" \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --query 'cluster.certificateAuthority.data' \
+                    --output text)
+
+                printf '%s' "$CA_DATA" |
+                    base64 -d > "$WORKSPACE/.kube/ca.crt"
+
+                echo "Getting EKS authentication token..."
+                EKS_TOKEN=$(awscli eks get-token \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --cluster-name "$EKS_CLUSTER" \
+                    --query 'status.token' \
+                    --output text)
+
+                kubectl() {
+                    docker run --rm --user 0:0 \
+                        --volumes-from jenkins \
+                        -w "$WORKSPACE" \
+                        bitnami/kubectl:latest \
+                        --server="$EKS_ENDPOINT" \
+                        --certificate-authority="$WORKSPACE/.kube/ca.crt" \
+                        --token="$EKS_TOKEN" "$@"
+                }
+
+                echo "Checking Kubernetes connectivity..."
+                kubectl get nodes
+
+                echo "Checking EBS CSI driver pods..."
+                kubectl get pods -n kube-system | grep ebs-csi || true
+
+                echo "Applying StorageClass manifest..."
+                test -f k8s/storageclass.yaml
+                kubectl apply -f k8s/storageclass.yaml
+                kubectl get storageclass ebs-gp3
+
+                echo "Creating namespace if required..."
+                kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 ||
+                    kubectl create namespace "$K8S_NAMESPACE"
+
+                echo "Checking existing PostgreSQL PVC..."
+
+                if kubectl get pvc postgres-pvc \
+                    -n "$K8S_NAMESPACE" >/dev/null 2>&1; then
+
+                    PVC_PHASE=$(kubectl get pvc postgres-pvc \
+                        -n "$K8S_NAMESPACE" \
+                        -o jsonpath='{.status.phase}')
+
+                    PVC_STORAGE_CLASS=$(kubectl get pvc postgres-pvc \
+                        -n "$K8S_NAMESPACE" \
+                        -o jsonpath='{.spec.storageClassName}')
+
+                    echo "PVC phase: $PVC_PHASE"
+                    echo "PVC storage class: $PVC_STORAGE_CLASS"
+
+                    if [ "$PVC_PHASE" != "Bound" ]; then
+                        echo "PVC is not Bound. Details:"
+                        kubectl describe pvc postgres-pvc \
+                            -n "$K8S_NAMESPACE"
+                        exit 1
+                    fi
+
+                    echo "Preserving the existing bound PostgreSQL volume."
+                else
+                    echo "PVC does not exist. It will be created from postgres.yaml."
+                fi
+
+                echo "Applying PostgreSQL manifests..."
+                kubectl apply -f k8s/postgres.yaml
+
+                echo "Checking PostgreSQL PVC..."
+                kubectl get pvc postgres-pvc -n "$K8S_NAMESPACE"
+
+                echo "Waiting for PostgreSQL deployment..."
+                kubectl rollout status deployment/postgres \
+                    -n "$K8S_NAMESPACE" \
+                    --timeout=300s
+
+                echo "PostgreSQL deployment is ready."
+
+                echo "Checking PostgreSQL pods..."
+                kubectl get pods -n "$K8S_NAMESPACE" -o wide
+
+                kubectl logs deployment/postgres \
+                    -n "$K8S_NAMESPACE" \
+                    --all-containers=true || true
+
+                echo "Applying application manifests..."
+                kubectl apply -f k8s/app.yaml
+
+                echo "Updating application image..."
+                kubectl set image deployment/securebank-app \
+                    securebank-app="$DOCKERHUB_USER/$IMAGE_NAME:$BUILD_NUMBER" \
+                    -n "$K8S_NAMESPACE"
+
+                echo "Waiting for application rollout..."
+                kubectl rollout status deployment/securebank-app \
+                    -n "$K8S_NAMESPACE" \
+                    --timeout=300s
+
+                echo "Checking deployed resources..."
+                kubectl get pods -n "$K8S_NAMESPACE" -o wide
+                kubectl get pvc -n "$K8S_NAMESPACE"
+                kubectl get services -n "$K8S_NAMESPACE"
+
+                echo "Deployment stage completed successfully."
+            '''
         }
     }
-
+}
+}
     post {
         always {
             sh '''
